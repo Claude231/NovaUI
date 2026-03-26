@@ -171,8 +171,79 @@ do
     if not ok then pcall(function() ScreenGui.Parent = lp:WaitForChild("PlayerGui", 3) end) end
 end
 
+-- ═══════════════════════════════════════════════════
+--  CUSTOM CURSOR (siempre visible cuando GUI abierto)
+-- ═══════════════════════════════════════════════════
+local CursorRoot = create("Frame", {
+    Name                 = "AnnomalyCursor",
+    Size                 = UDim2.new(0, 20, 0, 20),
+    BackgroundTransparency = 1,
+    ZIndex               = 9999,
+    Visible              = false,
+}, ScreenGui)
+
+local CursorRing = create("ImageLabel", {
+    Size                 = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Image                = "rbxassetid://3570695787",
+    ImageColor3          = T.accent,
+    ImageTransparency    = 0.3,
+    ZIndex               = 9999,
+}, CursorRoot)
+
+local CursorDot = create("Frame", {
+    Size             = UDim2.new(0, 4, 0, 4),
+    AnchorPoint      = Vector2.new(0.5, 0.5),
+    Position         = UDim2.new(0.5, 0, 0.5, 0),
+    BackgroundColor3 = T.accent,
+    BorderSizePixel  = 0,
+    ZIndex           = 10000,
+}, CursorRoot)
+create("UICorner", { CornerRadius = UDim.new(1, 0) }, CursorDot)
+
+-- Trail (cola del cursor)
+local TrailRoot = create("Frame", {
+    Name                 = "CursorTrail",
+    Size                 = UDim2.new(0, 14, 0, 14),
+    BackgroundTransparency = 1,
+    ZIndex               = 9997,
+    Visible              = false,
+}, ScreenGui)
+
+local TrailImg = create("ImageLabel", {
+    Size                 = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Image                = "rbxassetid://3570695787",
+    ImageColor3          = T.accentDim,
+    ImageTransparency    = 0.7,
+    ZIndex               = 9997,
+}, TrailRoot)
+
+-- Lógica de movimiento
+local _trailX, _trailY = 0, 0
+RunService.RenderStepped:Connect(function()
+    local mp = UIS:GetMouseLocation()
+    local mx, my = mp.X, mp.Y
+
+    -- Cursor principal
+    CursorRoot.Position = UDim2.new(0, mx - 10, 0, my - 10)
+
+    -- Trail con interpolación
+    _trailX = _trailX + (mx - _trailX) * 0.15
+    _trailY = _trailY + (my - _trailY) * 0.15
+    TrailRoot.Position = UDim2.new(0, _trailX - 7, 0, _trailY - 7)
+end)
+
+local function setCursorVisible(v)
+    CursorRoot.Visible = v
+    TrailRoot.Visible  = v
+    pcall(function()
+        UIS.MouseIconEnabled = not v
+    end)
+end
+
 -- ─────────────────────────────────
---  NOTIFICATIONS
+--  NOTIFICATIONS (GLOBAL - funciona siempre)
 -- ─────────────────────────────────
 local NotifHolder = create("Frame", {
     BackgroundTransparency = 1,
@@ -352,7 +423,10 @@ function Elem.Toggle(parent, bd, opts)
         if not st then tw(Lb, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtNormal}) end
     end)
     Btn.MouseButton1Down:Connect(function()
-        st = not st; upd(); callback(st)
+        st = not st; upd()
+        callback(st)
+        -- Notificación automática
+        Library:Notify(text .. " " .. (st and "enabled" or "disabled"), 2, st and "success" or "warning")
     end)
 
     local obj = {
@@ -545,7 +619,7 @@ function Elem.Dropdown(parent, bd, opts)
         Image = "rbxassetid://6724771531", ImageColor3 = T.txtNormal,
     }, DB)
 
-    -- floating dropdown list (parented to root so it layers on top)
+    -- floating dropdown list
     local sH = #list >= 4 and 76 or (19 * #list)
     local DS = create("ScrollingFrame", {
         Active = true, BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
@@ -695,7 +769,7 @@ function Elem.Keybind(parent, bd, opts)
         if binding then return end
         binding = true; KL.Text = "[...]"
         tw(KL, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {TextColor3=T.txtAccent})
-        local cn; cn = UIS.InputBegan:Connect(function(inp)
+        local cn; cn = hook(UIS.InputBegan, function(inp)
             if inp.UserInputType == Enum.UserInputType.Keyboard then
                 binding = false
                 if inp.KeyCode == Enum.KeyCode.Escape or inp.KeyCode == Enum.KeyCode.Backspace then
@@ -719,7 +793,7 @@ function Elem.Keybind(parent, bd, opts)
     return obj
 end
 
--- ── COLOR PICKER ────────────────────────────────────
+-- ── COLOR PICKER (con preview restaurado) ───────────
 function Elem.ColorPicker(parent, bd, opts)
     opts = opts or {}
     local text     = opts.Text     or "Color"
@@ -754,10 +828,11 @@ function Elem.ColorPicker(parent, bd, opts)
     -- picker popup
     local CF = create("Frame", {
         BackgroundColor3 = T.bg1, BorderColor3 = T.border1,
-        Size = UDim2.new(0, 200, 0, 172), Visible = false, ZIndex = 100,
+        Size = UDim2.new(0, 200, 0, 200), Visible = false, ZIndex = 100,
     }, ScreenGui)
     setDraggable(CF)
 
+    -- Hue bar
     local HB = create("TextButton", {
         BackgroundColor3 = Color3.new(1,1,1), BorderColor3 = T.border0,
         Position = UDim2.new(0, 10, 0, 10), Size = UDim2.new(0, 20, 0, 150),
@@ -780,6 +855,7 @@ function Elem.ColorPicker(parent, bd, opts)
         Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, ch, -1), ZIndex = 102,
     }, HB)
 
+    -- Color matrix
     local CM = create("TextButton", {
         BackgroundColor3 = Color3.fromHSV(ch,1,1), BorderColor3 = T.border0,
         Position = UDim2.new(0, 40, 0, 10), Size = UDim2.new(0, 150, 0, 150),
@@ -819,12 +895,25 @@ function Elem.ColorPicker(parent, bd, opts)
         Text = "", ZIndex = 105, AutoButtonColor = false,
     }, CM)
 
+    -- Preview (RESTAURADO)
+    local PreviewBg = create("Frame", {
+        BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
+        Position = UDim2.new(0, 10, 0, 170), Size = UDim2.new(0, 180, 0, 20),
+        ZIndex = 101,
+    }, CF)
+    local Preview = create("Frame", {
+        BackgroundColor3 = color, BorderSizePixel = 0,
+        Position = UDim2.new(0, 1, 0, 1), Size = UDim2.new(1, -2, 1, -2),
+        ZIndex = 102,
+    }, PreviewBg)
+
     local function updPick()
         color = Color3.fromHSV(ch, cs, cv)
         CB.BackgroundColor3 = color
         CM.BackgroundColor3 = Color3.fromHSV(ch, 1, 1)
         CP.Position = UDim2.new(cs, -1, 1-cv, -1)
         HP.Position = UDim2.new(0, 0, ch, -1)
+        Preview.BackgroundColor3 = color  -- ← PREVIEW UPDATE
         callback(color)
     end
 
@@ -880,6 +969,7 @@ function Elem.ColorPicker(parent, bd, opts)
             color=cl; ch,cs,cv=Color3.toHSV(cl); self.Value=cl
             CB.BackgroundColor3=color; CM.BackgroundColor3=Color3.fromHSV(ch,1,1)
             CP.Position=UDim2.new(cs,-1,1-cv,-1); HP.Position=UDim2.new(0,0,ch,-1)
+            Preview.BackgroundColor3=color
         end,
         Get = function(self) return color end,
     }
@@ -1112,7 +1202,7 @@ local function makeColumn(parent, xOffset)
 end
 
 -- ═══════════════════════════════════════════════════
---  CONFIG SYSTEM  (same as annomaly x, exposed on Win)
+--  CONFIG SYSTEM
 -- ═══════════════════════════════════════════════════
 local CFG_FOLDER   = "AnnomalyUILib"
 local CFG_AUTONAME = "__autoload"
@@ -1265,15 +1355,23 @@ function Library:CreateWindow(opts)
     -- toggle key
     hook(UIS.InputBegan, function(key)
         if UIS:GetFocusedTextBox() then return end
-        if key.KeyCode == ToggleKey then Main.Visible = not Main.Visible end
+        if key.KeyCode == ToggleKey then
+            Main.Visible = not Main.Visible
+            -- Mostrar/ocultar cursor custom
+            setCursorVisible(Main.Visible)
+        end
     end)
-    -- mouse unlock while GUI open
+
+    -- mouse unlock + cursor custom mientras GUI abierto
     hook(RunService.RenderStepped, function()
         if Main and Main.Visible then
-            UIS.MouseIconEnabled = true
+            UIS.MouseIconEnabled = false  -- Ocultar cursor de Roblox
+            setCursorVisible(true)        -- Mostrar cursor custom
             if UIS.MouseBehavior == Enum.MouseBehavior.LockCenter then
                 UIS.MouseBehavior = Enum.MouseBehavior.Default
             end
+        else
+            setCursorVisible(false)
         end
     end)
 
@@ -1301,11 +1399,8 @@ function Library:CreateWindow(opts)
     function Win:CreateTab(tabOpts)
         tabOpts = tabOpts or {}
         local tabName = tabOpts.Name or ("tab"..math.random(1,99))
-        local tabIcon = tabOpts.Icon -- optional prefix character
 
-        local label = tabIcon and (tabIcon .. " " .. tabName) or tabName
-
-        -- sidebar button
+        -- sidebar button (SIN EMOJI)
         local TB = create("TextButton", {
             BackgroundTransparency = 1,
             Size = UDim2.new(0,97,0,38), Text = "", AutoButtonColor = false,
@@ -1319,7 +1414,7 @@ function Library:CreateWindow(opts)
             AnchorPoint = Vector2.new(0.5,0.5),
             BackgroundTransparency = 1,
             Position = UDim2.new(0.5,3,0.5,0), Size = UDim2.new(1,-10,1,0),
-            Font = Enum.Font.Ubuntu, Text = label,
+            Font = Enum.Font.Ubuntu, Text = tabName,
             TextSize = 12, TextColor3 = T.txtNormal,
         }, TB)
 
@@ -1462,12 +1557,7 @@ function Library:CreateWindow(opts)
     end
 
     -- ── CONFIG API ─────────────────────────────────
-    --  Win stores/loads raw data tables; you supply the serialize/
-    --  deserialize logic since the Lib doesn't know your Config table.
-    --  OR use the shortcut helpers below if you just want to store Flags.
-
     function Win:SaveConfig(name, data)
-        -- data = arbitrary table. If nil, saves all Lib.Flags values.
         if not data then
             data = {}
             for k, obj in pairs(Library.Flags) do
@@ -1483,8 +1573,6 @@ function Library:CreateWindow(opts)
     end
 
     function Win:LoadConfig(name, applyFn)
-        -- applyFn(data) is your custom deserializer.
-        -- If nil, tries to apply to Lib.Flags automatically.
         local data = cfgLoad(name)
         if not data then
             if ShowNotifs then Library:Notify("config not found", 2.5, "error") end
@@ -1528,8 +1616,8 @@ function Library:CreateWindow(opts)
     end
 
     -- ── MISC ───────────────────────────────────────
-    function Win:Toggle() Main.Visible = not Main.Visible end
-    function Win:SetVisible(v) Main.Visible = v end
+    function Win:Toggle() Main.Visible = not Main.Visible; setCursorVisible(Main.Visible) end
+    function Win:SetVisible(v) Main.Visible = v; setCursorVisible(v) end
     function Win:IsVisible() return Main.Visible end
 
     function Win:Destroy()
@@ -1560,115 +1648,3 @@ function Library:Destroy()
 end
 
 return Library
-
---[[
-─────────────────────────────────────────────────────────────────
-  EXAMPLE USAGE
-─────────────────────────────────────────────────────────────────
-
-local Lib = loadstring(game:HttpGet("..."))()
-
-local Win = Lib:CreateWindow({
-    Title     = "myhub",
-    Subtitle  = "universal",
-    Version   = "1.0",
-    ToggleKey = Enum.KeyCode.End,
-})
-
-── COMBAT TAB ───────────────────────────────────────────────────
-local Combat = Win:CreateTab({ Name = "combat" })
-
-local L, R = Combat:CreateSection("silent aim")
-
-local sSilent = L:AddSector("silent aim")
-local tEnabled = sSilent:AddToggle({
-    Text     = "enabled",
-    Default  = false,
-    Flag     = "SilentEnabled",
-    Callback = function(v) Config.Silent.Enabled = v end,
-})
-sSilent:AddToggle({ Text="team check", Default=false, Callback=function(v) Config.Silent.TeamCheck=v end })
-sSilent:AddDropdown({ Text="target part", List={"Head","HumanoidRootPart","Random"}, Default="Head",
-    Callback=function(v) Config.Silent.TargetPart=v end })
-sSilent:AddSlider({ Text="hit chance", Min=0, Max=100, Default=100, Suffix="%",
-    Callback=function(v) Config.Silent.HitChance=v end })
-
-local sKey = L:AddSector("keybind")
-sKey:AddDropdown({ Text="mode", List={"Toggle","Hold"}, Default="Hold",
-    Callback=function(v) Config.Silent.KeybindMode=v end })
-sKey:AddKeybind({ Text="key", Default=Enum.KeyCode.E,
-    Callback=function(v) Config.Silent.Keybind=v end })
-
-local sFov = R:AddSector("fov circle")
-sFov:AddToggle({ Text="enable fov", Default=true, Callback=function(v) Config.FOV.Enabled=v end })
-sFov:AddToggle({ Text="visible", Default=true, Callback=function(v) Config.FOV.Visible=v end })
-sFov:AddSlider({ Text="radius", Min=30, Max=500, Default=150, Callback=function(v) Config.FOV.Radius=v end })
-sFov:AddColorPicker({ Text="color", Default=Color3.fromRGB(84,101,255),
-    Callback=function(c) Config.FOV.Color=c end })
-
-── VISUALS TAB ──────────────────────────────────────────────────
-local Visuals = Win:CreateTab({ Name = "visuals" })
-
-local EL, ER = Visuals:CreateSection("esp")
-local sEsp = EL:AddSector("esp elements")
-sEsp:AddToggle({ Text="enabled", Default=false, Flag="ESPEnabled",
-    Callback=function(v) Config.ESP.Enabled=v end })
-sEsp:AddToggle({ Text="boxes",    Default=true,  Callback=function(v) Config.ESP.Boxes=v end })
-sEsp:AddToggle({ Text="names",    Default=true,  Callback=function(v) Config.ESP.Names=v end })
-sEsp:AddToggle({ Text="tracers",  Default=false, Callback=function(v) Config.ESP.Tracers=v end })
-sEsp:AddSlider({ Text="max distance", Min=100, Max=4000, Default=1000,
-    Callback=function(v) Config.ESP.MaxDistance=v end })
-
-local sCol = ER:AddSector("colors")
-sCol:AddColorPicker({ Text="visible", Default=Color3.fromRGB(0,255,0),
-    Callback=function(c) Config.ESP.VisibleColor=c end })
-sCol:AddColorPicker({ Text="hidden",  Default=Color3.fromRGB(255,0,0),
-    Callback=function(c) Config.ESP.HiddenColor=c end })
-
-── SETTINGS TAB ─────────────────────────────────────────────────
-local Settings = Win:CreateTab({ Name = "settings" })
-
-local SL, SR = Settings:CreateSection("general")
-
-local sMenu = SL:AddSector("menu")
-sMenu:AddKeybind({ Text="toggle key", Default=Enum.KeyCode.End,
-    Callback=function(v) if v then Win.ToggleKey=v end end })
-sMenu:AddToggle({ Text="notifications", Default=true })
-
-local sInfo = SL:AddSector("info")
-sInfo:AddParagraph({ Title="annomaly ui lib v1.0", Content="sacaleche — based on annomaly x." })
-sInfo:AddSeparator()
-sInfo:AddLabel("// flags: " .. tostring(#Library.Flags))
-
-local sCfg = SR:AddSector("config")
-local cfgInput = sCfg:AddTextBox({ Placeholder="config name...", ClearOnFocus=false })
-sCfg:AddButton({ Text="save",          Style="default", Callback=function()
-    Win:SaveConfig(cfgInput:Get()) end })
-sCfg:AddButton({ Text="load",          Style="accent",  Callback=function()
-    Win:LoadConfig(cfgInput:Get()) end })
-sCfg:AddButton({ Text="delete",        Style="danger",  Callback=function()
-    Win:DeleteConfig(cfgInput:Get()) end })
-sCfg:AddButton({ Text="set autoload",  Style="default", Callback=function()
-    Win:SetAutoLoad(cfgInput:Get()) end })
-sCfg:AddButton({ Text="clear autoload",Style="default", Callback=function()
-    Win:ClearAutoLoad() end })
-
-── FOOTER STATUS (optional) ─────────────────────────────────────
-task.spawn(function()
-    while task.wait(0.5) do
-        local parts = {}
-        if Lib.Flags["SilentEnabled"] and Lib.Flags["SilentEnabled"].Value then
-            parts[#parts+1] = "silent"
-        end
-        if Lib.Flags["ESPEnabled"] and Lib.Flags["ESPEnabled"].Value then
-            parts[#parts+1] = "esp"
-        end
-        Win:SetFooterParts(parts)
-    end
-end)
-
-── AUTOLOAD ─────────────────────────────────────────────────────
-Win:RunAutoLoad()   -- loads the autoload config on start if set
-
-─────────────────────────────────────────────────────────────────
-]]
