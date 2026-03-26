@@ -2,6 +2,7 @@
 ╔══════════════════════════════════════════════════════════════╗
 ║              ANNOMALY UI LIB  v1.0                           ║
 ║         sacaleche — annomaly x aesthetic + lib api           ║
+║              UNDETECTABLE VERSION                            ║
 ╚══════════════════════════════════════════════════════════════╝
 
   API
@@ -60,14 +61,41 @@
   Win:SaveConfig("name")
   Win:LoadConfig("name")
   Win:DeleteConfig("name")
-  Win:ListConfigs()          -- returns table of names
+  Win:ListConfigs()
   Win:SetAutoLoad("name")
   Win:ClearAutoLoad()
-  Win:GetAutoLoad()          -- returns name or nil
+  Win:GetAutoLoad()
 
   -- footer
-  Win:SetFooterParts({ "aim", "esp" })  -- shown in bottom bar
+  Win:SetFooterParts({ "aim", "esp" })
 ]]
+
+-- ═══════════════════════════════════════════════════
+--  ANTI-DETECTION LAYER
+-- ═══════════════════════════════════════════════════
+
+-- Randomización de nombres para evasión
+local function genRandName()
+    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    local name = ""
+    for i = 1, math.random(8, 12) do
+        local idx = math.random(1, #chars)
+        name = name .. chars:sub(idx, idx)
+    end
+    return name
+end
+
+-- Nombres legítimos que anti-cheats ignoran
+local LEGIT_GUI_NAMES = {
+    "Backpack", "PlayerList", "Chat", "Freecam", "HealthBar",
+    "Topbar", "BottomBar", "Notifications", "CorePackages",
+    "PlayerScripts", "StarterGui", "ControlGui", "TouchGui"
+}
+
+local LEGIT_FRAME_NAMES = {
+    "Background", "Container", "Holder", "Frame", "Panel",
+    "MainFrame", "Display", "Interface", "UI", "HUD"
+}
 
 -- ═══════════════════════════════════════════════════
 --  SERVICES
@@ -82,7 +110,7 @@ local lp          = Players.LocalPlayer
 local mouse       = lp:GetMouse()
 
 -- ═══════════════════════════════════════════════════
---  THEME  (annomaly x exact palette)
+--  THEME
 -- ═══════════════════════════════════════════════════
 local T = {
     bg0       = Color3.fromRGB(12,12,12),
@@ -97,7 +125,6 @@ local T = {
     txtNormal = Color3.fromRGB(170,170,170),
     txtDim    = Color3.fromRGB(115,115,115),
     txtAccent = Color3.fromRGB(84,101,255),
-    -- status
     green     = Color3.fromRGB(50,190,100),
     red       = Color3.fromRGB(220,50,50),
     yellow    = Color3.fromRGB(220,160,40),
@@ -155,27 +182,52 @@ local function hook(sig, fn)
     return c
 end
 
--- ─────────────────────────────────
---  SCREENGUI
--- ─────────────────────────────────
+-- ═══════════════════════════════════════════════════
+--  SCREENGUI (UNDETECTABLE)
+-- ═══════════════════════════════════════════════════
 local ScreenGui = create("ScreenGui", {
     ResetOnSpawn   = false,
     ZIndexBehavior = Enum.ZIndexBehavior.Global,
-    Name           = "AnnomalyUILib",
+    Name           = LEGIT_GUI_NAMES[math.random(1, #LEGIT_GUI_NAMES)],
     IgnoreGuiInset = true,
 })
+
+-- Anti-Detection: Prioridad de Parent
 do
-    local ok = false
-    pcall(function() ScreenGui.Parent = (gethui and gethui()) or CoreGui; ok = true end)
-    if not ok then pcall(function() ScreenGui.Parent = CoreGui; ok = true end) end
-    if not ok then pcall(function() ScreenGui.Parent = lp:WaitForChild("PlayerGui", 3) end) end
+    local success = false
+    
+    -- 1. Intentar gethui() (más indetectable)
+    if gethui then
+        pcall(function()
+            ScreenGui.Parent = gethui()
+            success = true
+        end)
+    end
+    
+    -- 2. Si falla, intentar CoreGui (segunda opción)
+    if not success then
+        pcall(function()
+            ScreenGui.Parent = CoreGui
+            success = true
+        end)
+    end
+    
+    -- 3. Último recurso: PlayerGui (más detectable pero funciona siempre)
+    if not success then
+        pcall(function()
+            local pg = lp:WaitForChild("PlayerGui", 3)
+            if pg then
+                ScreenGui.Parent = pg
+            end
+        end)
+    end
 end
 
 -- ═══════════════════════════════════════════════════
---  CUSTOM CURSOR (siempre visible cuando GUI abierto)
+--  CUSTOM CURSOR
 -- ═══════════════════════════════════════════════════
 local CursorRoot = create("Frame", {
-    Name                 = "AnnomalyCursor",
+    Name                 = genRandName(),
     Size                 = UDim2.new(0, 20, 0, 20),
     BackgroundTransparency = 1,
     ZIndex               = 9999,
@@ -201,9 +253,8 @@ local CursorDot = create("Frame", {
 }, CursorRoot)
 create("UICorner", { CornerRadius = UDim.new(1, 0) }, CursorDot)
 
--- Trail (cola del cursor)
 local TrailRoot = create("Frame", {
-    Name                 = "CursorTrail",
+    Name                 = genRandName(),
     Size                 = UDim2.new(0, 14, 0, 14),
     BackgroundTransparency = 1,
     ZIndex               = 9997,
@@ -219,16 +270,11 @@ local TrailImg = create("ImageLabel", {
     ZIndex               = 9997,
 }, TrailRoot)
 
--- Lógica de movimiento
 local _trailX, _trailY = 0, 0
 RunService.RenderStepped:Connect(function()
     local mp = UIS:GetMouseLocation()
     local mx, my = mp.X, mp.Y
-
-    -- Cursor principal
     CursorRoot.Position = UDim2.new(0, mx - 10, 0, my - 10)
-
-    -- Trail con interpolación
     _trailX = _trailX + (mx - _trailX) * 0.15
     _trailY = _trailY + (my - _trailY) * 0.15
     TrailRoot.Position = UDim2.new(0, _trailX - 7, 0, _trailY - 7)
@@ -242,10 +288,11 @@ local function setCursorVisible(v)
     end)
 end
 
--- ─────────────────────────────────
---  NOTIFICATIONS (GLOBAL - funciona siempre)
--- ─────────────────────────────────
+-- ═══════════════════════════════════════════════════
+--  NOTIFICATIONS (GLOBAL)
+-- ═══════════════════════════════════════════════════
 local NotifHolder = create("Frame", {
+    Name                 = genRandName(),
     BackgroundTransparency = 1,
     Position = UDim2.new(1, -245, 0, 8),
     Size     = UDim2.new(0, 235, 1, -16),
@@ -273,24 +320,26 @@ function Library:Notify(text, duration, ntype)
     local icon = NOTIF_ICON[ntype] or "i"
     _nIdx += 1
     local wrap = create("Frame", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Size        = UDim2.new(1, 0, 0, 28),
         LayoutOrder = _nIdx,
     }, NotifHolder)
     local card = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = T.bg1,
         BorderColor3     = T.border0,
         Size             = UDim2.new(1, 0, 1, 0),
         Position         = UDim2.new(1, 0, 0, 0),
         ZIndex           = 201,
     }, wrap)
-    -- accent bar
     create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = col, BorderSizePixel = 0,
         Size = UDim2.new(0, 3, 1, 0), ZIndex = 202,
     }, card)
-    -- icon
     create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position           = UDim2.new(0, 8, 0, 0),
         Size               = UDim2.new(0, 14, 1, 0),
@@ -301,8 +350,8 @@ function Library:Notify(text, duration, ntype)
         TextXAlignment     = Enum.TextXAlignment.Center,
         ZIndex             = 202,
     }, card)
-    -- message
     create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position           = UDim2.new(0, 24, 0, 0),
         Size               = UDim2.new(1, -28, 1, 0),
@@ -314,16 +363,16 @@ function Library:Notify(text, duration, ntype)
         TextTruncate       = Enum.TextTruncate.AtEnd,
         ZIndex             = 202,
     }, card)
-    -- progress bar
     local pbg = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = T.border0, BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 203,
     }, card)
     local pfg = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = col, BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 1, 0), ZIndex = 204,
     }, pbg)
-    -- slide in
     tw(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         Position = UDim2.new(0, 0, 0, 0)
     })
@@ -333,7 +382,6 @@ function Library:Notify(text, duration, ntype)
             Size = UDim2.new(0, 0, 1, 0)
         }):Play()
     end)
-    -- slide out & destroy
     task.delay(duration, function()
         if not(card and card.Parent) then return end
         tw(card, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Position = UDim2.new(1, 0, 0, 0) })
@@ -344,6 +392,39 @@ function Library:Notify(text, duration, ntype)
         if wrap.Parent then wrap:Destroy() end
     end)
 end
+
+-- ═══════════════════════════════════════════════════
+--  LIVE PREVIEW SYSTEM (FOV Circle)
+-- ═══════════════════════════════════════════════════
+local LivePreviews = {}
+
+local function createFOVPreview()
+    local camera = workspace.CurrentCamera
+    local fovCircle = Drawing.new("Circle")
+    fovCircle.Thickness = 2
+    fovCircle.NumSides = 64
+    fovCircle.Radius = 150
+    fovCircle.Filled = false
+    fovCircle.Visible = false
+    fovCircle.ZIndex = 999
+    fovCircle.Color = Color3.fromRGB(84, 101, 255)
+    fovCircle.Transparency = 1
+    
+    LivePreviews.FOVCircle = fovCircle
+    
+    -- Update loop
+    RunService.RenderStepped:Connect(function()
+        if fovCircle and fovCircle.Visible then
+            local centerPos = camera.ViewportSize / 2
+            fovCircle.Position = Vector2.new(centerPos.X, centerPos.Y)
+        end
+    end)
+    
+    return fovCircle
+end
+
+-- Inicializar preview
+task.spawn(createFOVPreview)
 
 -- ═══════════════════════════════════════════════════
 --  ELEMENT BUILDERS
@@ -365,6 +446,7 @@ function Elem.Toggle(parent, bd, opts)
     local st = def
 
     local Btn = create("TextButton", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Size             = UDim2.new(1, 0, 0, h),
         Text             = "",
@@ -372,6 +454,7 @@ function Elem.Toggle(parent, bd, opts)
     }, parent)
 
     local Bx = create("Frame", {
+        Name             = genRandName(),
         AnchorPoint      = Vector2.new(0, 0.5),
         BackgroundColor3 = st and T.accent or T.bg2,
         BorderColor3     = st and T.accentDim or T.border0,
@@ -380,6 +463,7 @@ function Elem.Toggle(parent, bd, opts)
     }, Btn)
 
     local Lb = create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position     = UDim2.new(0, 24, 0, 0),
         Size         = UDim2.new(0, 210, 0, desc and 17 or h),
@@ -392,6 +476,7 @@ function Elem.Toggle(parent, bd, opts)
 
     if desc then
         create("TextLabel", {
+            Name                 = genRandName(),
             BackgroundTransparency = 1,
             Position     = UDim2.new(0, 24, 0, 16),
             Size         = UDim2.new(0, 210, 0, 12),
@@ -425,7 +510,6 @@ function Elem.Toggle(parent, bd, opts)
     Btn.MouseButton1Down:Connect(function()
         st = not st; upd()
         callback(st)
-        -- Notificación automática
         Library:Notify(text .. " " .. (st and "enabled" or "disabled"), 2, st and "success" or "warning")
     end)
 
@@ -456,11 +540,13 @@ function Elem.Slider(parent, bd, opts)
     local fmtStr = decimals > 0 and ("%." .. decimals .. "f") or "%d"
 
     local F = create("Frame", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 37),
     }, parent)
 
     local ST2 = create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 5),
         Size     = UDim2.new(0, 170, 0, 13),
@@ -470,6 +556,7 @@ function Elem.Slider(parent, bd, opts)
     }, F)
 
     local SV = create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 5),
         Size     = UDim2.new(0, SLIDER_W + 1, 0, 13),
@@ -480,6 +567,7 @@ function Elem.Slider(parent, bd, opts)
     }, F)
 
     local SBt = create("TextButton", {
+        Name             = genRandName(),
         BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
         Position = UDim2.new(0, 8, 0, 21),
         Size     = UDim2.new(0, SLIDER_W, 0, 9),
@@ -488,6 +576,7 @@ function Elem.Slider(parent, bd, opts)
 
     local px  = math.round((val - mn) / (mx - mn) * SLIDER_W)
     local SFl = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = Color3.fromRGB(255,255,255),
         BorderSizePixel  = 0,
         Size             = UDim2.new(0, px, 1, 0),
@@ -499,8 +588,8 @@ function Elem.Slider(parent, bd, opts)
         },
         Rotation = 90,
     }, SFl)
-    -- thumb
     local thumb = create("Frame", {
+        Name             = genRandName(),
         Size             = UDim2.new(0, 7, 0, 9),
         Position         = UDim2.new(0, math.max(0, px - 3), 0, 0),
         BackgroundColor3 = T.txtBright,
@@ -588,11 +677,13 @@ function Elem.Dropdown(parent, bd, opts)
     local sel = def
 
     local W2 = create("Frame", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 46),
     }, parent)
 
     local DT = create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 5),  Size = UDim2.new(0, 200, 0, 13),
         Font = Enum.Font.Ubuntu, Text = text,
@@ -601,12 +692,14 @@ function Elem.Dropdown(parent, bd, opts)
     }, W2)
 
     local DB = create("TextButton", {
+        Name             = genRandName(),
         BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
         Position = UDim2.new(0, 8, 0, 21), Size = UDim2.new(0, 260, 0, 19),
         AutoButtonColor = false, Text = "",
     }, W2)
 
     local DBT = create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 6, 0, 0), Size = UDim2.new(0, 240, 1, 0),
         Font = Enum.Font.Ubuntu, Text = tostring(sel or ""),
@@ -614,14 +707,15 @@ function Elem.Dropdown(parent, bd, opts)
         TextXAlignment = Enum.TextXAlignment.Left,
     }, DB)
     create("ImageLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 245, 0, 8), Size = UDim2.new(0, 6, 0, 4),
         Image = "rbxassetid://6724771531", ImageColor3 = T.txtNormal,
     }, DB)
 
-    -- floating dropdown list
     local sH = #list >= 4 and 76 or (19 * #list)
     local DS = create("ScrollingFrame", {
+        Name             = genRandName(),
         Active = true, BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
         Size = UDim2.new(0, 260, 0, sH),
         CanvasSize = UDim2.new(0, 0, 0, 19 * #list),
@@ -671,11 +765,13 @@ function Elem.Dropdown(parent, bd, opts)
         end
         for _, opt in ipairs(list) do
             local OB = create("TextButton", {
+                Name             = genRandName(),
                 BackgroundColor3 = T.bg2, BorderSizePixel = 0,
                 Size = UDim2.new(1, 0, 0, 19),
                 AutoButtonColor = false, Text = "", ZIndex = 50,
             }, DS)
             local OT = create("TextLabel", {
+                Name                 = genRandName(),
                 BackgroundTransparency = 1,
                 Position = UDim2.new(0, 7, 0, 0), Size = UDim2.new(0, 246, 1, 0),
                 Font = Enum.Font.Ubuntu, Text = tostring(opt),
@@ -683,6 +779,7 @@ function Elem.Dropdown(parent, bd, opts)
                 TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 50,
             }, OB)
             local OD = create("Frame", {
+                Name             = genRandName(),
                 BackgroundColor3 = T.accent, BorderSizePixel = 0,
                 Size = UDim2.new(0, 2, 1, 0), Visible = false, ZIndex = 50,
             }, OB)
@@ -734,11 +831,13 @@ function Elem.Keybind(parent, bd, opts)
     local binding = false
 
     local Btn = create("TextButton", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 19),
         Text = "", AutoButtonColor = false,
     }, parent)
 
     local Lb = create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0, 160, 1, 0),
         Font = Enum.Font.Ubuntu, Text = text,
@@ -747,6 +846,7 @@ function Elem.Keybind(parent, bd, opts)
     }, Btn)
 
     local KL = create("TextButton", {
+        Name             = genRandName(),
         AnchorPoint = Vector2.new(1, 0),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 265, 0, 0), Size = UDim2.new(0, 90, 0, 19),
@@ -793,23 +893,26 @@ function Elem.Keybind(parent, bd, opts)
     return obj
 end
 
--- ── COLOR PICKER (con preview restaurado) ───────────
+-- ── COLOR PICKER (CON LIVE PREVIEW FUNCIONAL) ───────
 function Elem.ColorPicker(parent, bd, opts)
     opts = opts or {}
     local text     = opts.Text     or "Color"
     local def      = opts.Default  or Color3.new(1,1,1)
     local callback = opts.Callback or function() end
     local flag     = opts.Flag
+    local previewType = opts.PreviewType  -- "fov", "esp", etc.
 
     bd.Size = bd.Size + UDim2.new(0, 0, 0, 19)
     local color     = def
     local ch, cs, cv = Color3.toHSV(color)
 
     local Row = create("TextButton", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 19),
         Text = "", AutoButtonColor = false,
     }, parent)
     local CL = create("TextLabel", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0, 200, 1, 0),
         Font = Enum.Font.Ubuntu, Text = text,
@@ -817,6 +920,7 @@ function Elem.ColorPicker(parent, bd, opts)
         TextXAlignment = Enum.TextXAlignment.Left,
     }, Row)
     local CB = create("TextButton", {
+        Name             = genRandName(),
         AnchorPoint = Vector2.new(1, 0.5), BackgroundColor3 = color,
         BorderColor3 = T.border1,
         Position = UDim2.new(0, 267, 0.5, 0), Size = UDim2.new(0, 32, 0, 10),
@@ -825,15 +929,16 @@ function Elem.ColorPicker(parent, bd, opts)
     Row.MouseEnter:Connect(function() tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtBright}) end)
     Row.MouseLeave:Connect(function() tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtNormal}) end)
 
-    -- picker popup
+    -- Picker popup
     local CF = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = T.bg1, BorderColor3 = T.border1,
         Size = UDim2.new(0, 200, 0, 200), Visible = false, ZIndex = 100,
     }, ScreenGui)
     setDraggable(CF)
 
-    -- Hue bar
     local HB = create("TextButton", {
+        Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1), BorderColor3 = T.border0,
         Position = UDim2.new(0, 10, 0, 10), Size = UDim2.new(0, 20, 0, 150),
         AutoButtonColor = false, Text = "", ZIndex = 101,
@@ -851,17 +956,19 @@ function Elem.ColorPicker(parent, bd, opts)
         },
     }, HB)
     local HP = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1), BorderColor3 = Color3.new(0,0,0),
         Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, ch, -1), ZIndex = 102,
     }, HB)
 
-    -- Color matrix
     local CM = create("TextButton", {
+        Name             = genRandName(),
         BackgroundColor3 = Color3.fromHSV(ch,1,1), BorderColor3 = T.border0,
         Position = UDim2.new(0, 40, 0, 10), Size = UDim2.new(0, 150, 0, 150),
         AutoButtonColor = false, Text = "", ZIndex = 101,
     }, CF)
     local SO = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 0,
         Size = UDim2.new(1,0,1,0), ZIndex = 102,
     }, CM)
@@ -876,6 +983,7 @@ function Elem.ColorPicker(parent, bd, opts)
         },
     }, SO)
     local VO = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = Color3.new(0,0,0), BorderSizePixel = 0,
         Size = UDim2.new(1,0,1,0), ZIndex = 103,
     }, CM)
@@ -887,23 +995,31 @@ function Elem.ColorPicker(parent, bd, opts)
         },
     }, VO)
     local CP = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1), BorderColor3 = Color3.new(0,0,0),
         Size = UDim2.new(0,3,0,3), Position = UDim2.new(cs,-1,1-cv,-1), ZIndex = 104,
     }, CM)
     local CMH = create("TextButton", {
+        Name                 = genRandName(),
         BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0),
         Text = "", ZIndex = 105, AutoButtonColor = false,
     }, CM)
 
-    -- Preview (RESTAURADO)
+    -- LIVE PREVIEW REAL-TIME
     local PreviewBg = create("Frame", {
+        Name             = genRandName(),
         BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
         Position = UDim2.new(0, 10, 0, 170), Size = UDim2.new(0, 180, 0, 20),
         ZIndex = 101,
     }, CF)
-    local Preview = create("Frame", {
-        BackgroundColor3 = color, BorderSizePixel = 0,
-        Position = UDim2.new(0, 1, 0, 1), Size = UDim2.new(1, -2, 1, -2),
+    local PreviewLabel = create("TextLabel", {
+        Name                 = genRandName(),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Font = Enum.Font.Ubuntu,
+        Text = "preview",
+        TextColor3 = T.txtDim,
+        TextSize = 10,
         ZIndex = 102,
     }, PreviewBg)
 
@@ -913,7 +1029,12 @@ function Elem.ColorPicker(parent, bd, opts)
         CM.BackgroundColor3 = Color3.fromHSV(ch, 1, 1)
         CP.Position = UDim2.new(cs, -1, 1-cv, -1)
         HP.Position = UDim2.new(0, 0, ch, -1)
-        Preview.BackgroundColor3 = color  -- ← PREVIEW UPDATE
+        
+        -- ACTUALIZAR LIVE PREVIEW
+        if LivePreviews.FOVCircle then
+            LivePreviews.FOVCircle.Color = color
+        end
+        
         callback(color)
     end
 
@@ -945,10 +1066,20 @@ function Elem.ColorPicker(parent, bd, opts)
 
     local iCF, iCB2 = false, false
     CB.MouseButton1Down:Connect(function()
-        if CF.Visible then CF.Visible=false; return end
+        if CF.Visible then
+            CF.Visible=false
+            if LivePreviews.FOVCircle then LivePreviews.FOVCircle.Visible = false end
+            return
+        end
         local bp = CB.AbsolutePosition
         CF.Position = UDim2.new(0, bp.X+CB.AbsoluteSize.X+6, 0, bp.Y-10)
         CF.Visible = true
+        
+        -- Mostrar preview cuando se abre el picker
+        if LivePreviews.FOVCircle then
+            LivePreviews.FOVCircle.Visible = true
+            LivePreviews.FOVCircle.Color = color
+        end
     end)
     CF.MouseEnter:Connect(function() iCF=true end)
     CF.MouseLeave:Connect(function() iCF=false end)
@@ -959,6 +1090,7 @@ function Elem.ColorPicker(parent, bd, opts)
             inp.UserInputType==Enum.UserInputType.MouseButton2)
             and CF.Visible and not iCF and not iCB2 then
             CF.Visible = false
+            if LivePreviews.FOVCircle then LivePreviews.FOVCircle.Visible = false end
         end
     end)
 
@@ -969,7 +1101,7 @@ function Elem.ColorPicker(parent, bd, opts)
             color=cl; ch,cs,cv=Color3.toHSV(cl); self.Value=cl
             CB.BackgroundColor3=color; CM.BackgroundColor3=Color3.fromHSV(ch,1,1)
             CP.Position=UDim2.new(cs,-1,1-cv,-1); HP.Position=UDim2.new(0,0,ch,-1)
-            Preview.BackgroundColor3=color
+            if LivePreviews.FOVCircle then LivePreviews.FOVCircle.Color = color end
         end,
         Get = function(self) return color end,
     }
@@ -993,8 +1125,9 @@ function Elem.Button(parent, bd, opts)
     local c = bgMap[style] or bgMap.default
 
     bd.Size = bd.Size + UDim2.new(0, 0, 0, 28)
-    local BF = create("Frame", {BackgroundTransparency=1, Size=UDim2.new(1,0,0,28)}, parent)
+    local BF = create("Frame", {Name=genRandName(),BackgroundTransparency=1, Size=UDim2.new(1,0,0,28)}, parent)
     local B  = create("TextButton", {
+        Name             = genRandName(),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = c[1], BorderColor3 = T.border0,
         Position = UDim2.new(0.5,0,0.5,0), Size = UDim2.new(0,215,0,18),
@@ -1018,8 +1151,9 @@ end
 function Elem.Label(parent, bd, text, subtext)
     local h = subtext and 28 or 16
     bd.Size = bd.Size + UDim2.new(0, 0, 0, h)
-    local F = create("Frame", {BackgroundTransparency=1, Size=UDim2.new(1,0,0,h)}, parent)
+    local F = create("Frame", {Name=genRandName(),BackgroundTransparency=1, Size=UDim2.new(1,0,0,h)}, parent)
     create("TextLabel", {
+        Name=genRandName(),
         BackgroundTransparency=1, Size=UDim2.new(1,0,0,16),
         Font=Enum.Font.Ubuntu, Text="  "..text,
         TextColor3=T.txtNormal, TextSize=12,
@@ -1027,6 +1161,7 @@ function Elem.Label(parent, bd, text, subtext)
     }, F)
     if subtext then
         create("TextLabel", {
+            Name=genRandName(),
             BackgroundTransparency=1, Position=UDim2.new(0,0,0,16),
             Size=UDim2.new(1,0,0,12),
             Font=Enum.Font.Ubuntu, Text="  "..subtext,
@@ -1047,8 +1182,9 @@ function Elem.TextBox(parent, bd, opts)
     local flag       = opts.Flag
 
     bd.Size = bd.Size + UDim2.new(0, 0, 0, 28)
-    local BF = create("Frame", {BackgroundTransparency=1, Size=UDim2.new(1,0,0,28)}, parent)
+    local BF = create("Frame", {Name=genRandName(),BackgroundTransparency=1, Size=UDim2.new(1,0,0,28)}, parent)
     local TB = create("TextBox", {
+        Name=genRandName(),
         AnchorPoint = Vector2.new(0.5,0.5),
         BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
         Position = UDim2.new(0.5,0,0.5,0), Size = UDim2.new(0,215,0,18),
@@ -1082,8 +1218,9 @@ end
 -- ── SEPARATOR ───────────────────────────────────────
 function Elem.Separator(parent, bd)
     bd.Size = bd.Size + UDim2.new(0, 0, 0, 12)
-    local F = create("Frame", {BackgroundTransparency=1, Size=UDim2.new(1,0,0,12)}, parent)
+    local F = create("Frame", {Name=genRandName(),BackgroundTransparency=1, Size=UDim2.new(1,0,0,12)}, parent)
     create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.border1, BorderSizePixel = 0,
         Position = UDim2.new(0,8,0.5,-1), Size = UDim2.new(1,-16,0,1),
     }, F)
@@ -1099,6 +1236,7 @@ function Elem.Paragraph(parent, bd, opts)
 
     bd.Size = bd.Size + UDim2.new(0, 0, 0, h)
     local F = create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
         Size = UDim2.new(1,-16,0,h),
     }, parent)
@@ -1106,6 +1244,7 @@ function Elem.Paragraph(parent, bd, opts)
     local titleLbl
     if title ~= "" then
         titleLbl = create("TextLabel", {
+            Name=genRandName(),
             BackgroundTransparency = 1,
             Position = UDim2.new(0,7,0,4), Size = UDim2.new(1,-14,0,12),
             Font = Enum.Font.Ubuntu, Text = title,
@@ -1115,6 +1254,7 @@ function Elem.Paragraph(parent, bd, opts)
     end
 
     local contentLbl = create("TextLabel", {
+        Name=genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0,7,0, title~="" and 17 or 5),
         Size     = UDim2.new(1,-14,0, h-(title~="" and 20 or 8)),
@@ -1135,10 +1275,12 @@ end
 -- ═══════════════════════════════════════════════════
 local function makeSector(scrollParent, name, lo)
     local Bd = create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.border1, BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 22), LayoutOrder = lo or 0,
     }, scrollParent)
     local Ct = create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.bg1, BorderSizePixel = 0,
         Position = UDim2.new(0,1,0,1), Size = UDim2.new(1,-2,1,-2),
     }, Bd)
@@ -1148,6 +1290,7 @@ local function makeSector(scrollParent, name, lo)
     }, Ct)
     create("UIPadding", {PaddingTop = UDim.new(0,11)}, Ct)
     create("TextLabel", {
+        Name=genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0,7,0,-8), Size = UDim2.new(1,-7,0,14),
         Font = Enum.Font.Ubuntu, Text = "// " .. name,
@@ -1170,10 +1313,11 @@ local function makeSector(scrollParent, name, lo)
 end
 
 -- ═══════════════════════════════════════════════════
---  COLUMN  (left / right scroll panel)
+--  COLUMN
 -- ═══════════════════════════════════════════════════
 local function makeColumn(parent, xOffset)
     local scroll = create("ScrollingFrame", {
+        Name=genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, xOffset, 0, 6),
         Size     = UDim2.new(0, 284, 1, -10),
@@ -1270,9 +1414,8 @@ function Library:CreateWindow(opts)
     local ToggleKey  = opts.ToggleKey  or Enum.KeyCode.End
     local ShowNotifs = opts.Notifications ~= false
 
-    -- ── MAIN FRAME ─────────────────────────────────
     local Main = create("ImageButton", {
-        Name             = "Main",
+        Name             = LEGIT_FRAME_NAMES[math.random(1, #LEGIT_FRAME_NAMES)],
         AnchorPoint      = Vector2.new(0.5, 0.5),
         BackgroundColor3 = T.bg0,
         BorderColor3     = T.accent,
@@ -1284,22 +1427,23 @@ function Library:CreateWindow(opts)
     }, ScreenGui)
     setDraggable(Main)
 
-    -- noise overlay
     create("ImageLabel", {
+        Name=genRandName(),
         BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0),
         Image = "http://www.roblox.com/asset/?id=7300333488",
         ImageTransparency = 0.97,
         ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.new(0,128,0,128),
         ZIndex = 0,
     }, Main)
-    -- top accent bar
     create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.accent, BorderSizePixel = 0,
         Size = UDim2.new(1,0,0,1), ZIndex = 3,
     }, Main)
-    -- title bar
+
     local titleTag = Subtitle ~= "" and Subtitle:lower() or "ui"
     create("TextLabel", {
+        Name=genRandName(),
         AnchorPoint = Vector2.new(0.5, 0),
         BackgroundTransparency = 1,
         Position = UDim2.new(0.5,0,0,1), Size = UDim2.new(1,-22,0,29),
@@ -1312,27 +1456,29 @@ function Library:CreateWindow(opts)
         TextXAlignment = Enum.TextXAlignment.Left,
         RichText = true, ZIndex = 2,
     }, Main)
-    -- header divider
     create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.border0, BorderSizePixel = 0,
         Position = UDim2.new(0,0,0,30), Size = UDim2.new(1,0,0,1), ZIndex = 2,
     }, Main)
-    -- sidebar divider
     create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.border0, BorderSizePixel = 0,
         Position = UDim2.new(0,96,0,31), Size = UDim2.new(0,1,0,451), ZIndex = 2,
     }, Main)
 
-    -- footer
     local FooterBar = create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.bg1, BorderColor3 = T.border0,
         Position = UDim2.new(0,0,1,-17), Size = UDim2.new(1,0,0,17), ZIndex = 2,
     }, Main)
     create("Frame", {
+        Name=genRandName(),
         BackgroundColor3 = T.border0, BorderSizePixel = 0,
         Size = UDim2.new(1,0,0,1), ZIndex = 3,
     }, FooterBar)
     local FooterText = create("TextLabel", {
+        Name=genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0,8,0,0), Size = UDim2.new(1,-16,1,0),
         Font = Enum.Font.Ubuntu, Text = "> idle",
@@ -1340,33 +1486,31 @@ function Library:CreateWindow(opts)
         TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
     }, FooterBar)
 
-    -- tab sidebar
     local TabButtons = create("Frame", {
+        Name=genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0,0,0,31), Size = UDim2.new(0,97,0,452),
     }, Main)
     create("UIListLayout", {HorizontalAlignment = Enum.HorizontalAlignment.Center}, TabButtons)
 
     local TabsFrame = create("Frame", {
+        Name=genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0,100,0,31), Size = UDim2.new(0,586,0,452),
     }, Main)
 
-    -- toggle key
     hook(UIS.InputBegan, function(key)
         if UIS:GetFocusedTextBox() then return end
         if key.KeyCode == ToggleKey then
             Main.Visible = not Main.Visible
-            -- Mostrar/ocultar cursor custom
             setCursorVisible(Main.Visible)
         end
     end)
 
-    -- mouse unlock + cursor custom mientras GUI abierto
     hook(RunService.RenderStepped, function()
         if Main and Main.Visible then
-            UIS.MouseIconEnabled = false  -- Ocultar cursor de Roblox
-            setCursorVisible(true)        -- Mostrar cursor custom
+            UIS.MouseIconEnabled = false
+            setCursorVisible(true)
             if UIS.MouseBehavior == Enum.MouseBehavior.LockCenter then
                 UIS.MouseBehavior = Enum.MouseBehavior.Default
             end
@@ -1375,13 +1519,11 @@ function Library:CreateWindow(opts)
         end
     end)
 
-    -- ── WINDOW OBJECT ──────────────────────────────
     local Win            = {}
     local _footerParts   = {}
     local _firstTab      = true
     local _selectedTabBtn = nil
 
-    -- footer loop
     task.spawn(function()
         while task.wait(0.5) do
             if not(Main and Main.Parent) then break end
@@ -1395,22 +1537,23 @@ function Library:CreateWindow(opts)
 
     function Win:SetFooterParts(parts) _footerParts = parts or {} end
 
-    -- ── CREATE TAB ─────────────────────────────────
     function Win:CreateTab(tabOpts)
         tabOpts = tabOpts or {}
         local tabName = tabOpts.Name or ("tab"..math.random(1,99))
 
-        -- sidebar button (SIN EMOJI)
         local TB = create("TextButton", {
+            Name=genRandName(),
             BackgroundTransparency = 1,
             Size = UDim2.new(0,97,0,38), Text = "", AutoButtonColor = false,
         }, TabButtons)
         local TI = create("Frame", {
+            Name=genRandName(),
             BackgroundColor3 = T.accent, BorderSizePixel = 0,
             Position = UDim2.new(0,0,0.15,0), Size = UDim2.new(0,2,0.7,0),
             Visible = false,
         }, TB)
         local TL = create("TextLabel", {
+            Name=genRandName(),
             AnchorPoint = Vector2.new(0.5,0.5),
             BackgroundTransparency = 1,
             Position = UDim2.new(0.5,3,0.5,0), Size = UDim2.new(1,-10,1,0),
@@ -1418,14 +1561,13 @@ function Library:CreateWindow(opts)
             TextSize = 12, TextColor3 = T.txtNormal,
         }, TB)
 
-        -- tab content frame
         local Tab = create("Frame", {
-            Name = "Tab_"..tabName,
+            Name=genRandName(),
             BackgroundTransparency = 1,
             Size = UDim2.new(1,0,1,0), Visible = false,
         }, TabsFrame)
-        -- sub-section bar
         local TSB = create("Frame", {
+            Name=genRandName(),
             BackgroundTransparency = 1,
             Size = UDim2.new(1,0,0,27), ClipsDescendants = false,
         }, Tab)
@@ -1434,10 +1576,12 @@ function Library:CreateWindow(opts)
             HorizontalAlignment = Enum.HorizontalAlignment.Center,
         }, TSB)
         create("Frame", {
+            Name=genRandName(),
             BackgroundColor3 = T.border0, BorderSizePixel = 0,
             Position = UDim2.new(0,0,0,27), Size = UDim2.new(1,0,0,1),
         }, Tab)
         local TF = create("Frame", {
+            Name=genRandName(),
             BackgroundTransparency = 1,
             Position = UDim2.new(0,0,0,28), Size = UDim2.new(1,0,1,-28),
         }, Tab)
@@ -1477,17 +1621,15 @@ function Library:CreateWindow(opts)
 
         local TabObj = {}
 
-        -- ── CREATE SECTION ─────────────────────────
         function TabObj:CreateSection(secName)
-            -- add sub-tab button
             local SB = create("TextButton", {
+                Name=genRandName(),
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1,0,1,0),
                 Font = Enum.Font.Ubuntu, Text = secName,
                 TextColor3 = T.txtNormal, TextSize = 13,
                 AutoButtonColor = false,
             }, TSB)
-            -- re-distribute widths equally
             local allSB = {}
             for _, c in pairs(TSB:GetChildren()) do
                 if c:IsA("TextButton") then allSB[#allSB+1] = c end
@@ -1495,8 +1637,8 @@ function Library:CreateWindow(opts)
             for _, b in ipairs(allSB) do
                 b.Size = UDim2.new(1/#allSB, 0, 1, 0)
             end
-            -- active underline
             local SD = create("Frame", {
+                Name=genRandName(),
                 BackgroundColor3 = Color3.fromRGB(255,255,255),
                 BorderSizePixel = 0,
                 AnchorPoint = Vector2.new(0,1),
@@ -1511,13 +1653,12 @@ function Library:CreateWindow(opts)
                 },
             }, SD)
 
-            -- section content frame
             local SF = create("Frame", {
+                Name=genRandName(),
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1,0,1,0), Visible = false,
             }, TF)
 
-            -- columns
             local Left  = makeColumn(SF, 6)
             local Right = makeColumn(SF, 298)
 
@@ -1556,7 +1697,6 @@ function Library:CreateWindow(opts)
         return TabObj
     end
 
-    -- ── CONFIG API ─────────────────────────────────
     function Win:SaveConfig(name, data)
         if not data then
             data = {}
@@ -1615,7 +1755,6 @@ function Library:CreateWindow(opts)
         if al then self:LoadConfig(al, applyFn) end
     end
 
-    -- ── MISC ───────────────────────────────────────
     function Win:Toggle() Main.Visible = not Main.Visible; setCursorVisible(Main.Visible) end
     function Win:SetVisible(v) Main.Visible = v; setCursorVisible(v) end
     function Win:IsVisible() return Main.Visible end
@@ -1626,7 +1765,6 @@ function Library:CreateWindow(opts)
         if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
     end
 
-    -- startup notif
     task.delay(1, function()
         if ShowNotifs then
             Library:Notify(Title:lower() .. " v" .. Version .. " ready", 3.5, "info")
@@ -1637,14 +1775,23 @@ function Library:CreateWindow(opts)
     return Win
 end
 
--- ═══════════════════════════════════════════════════
---  DESTROY
--- ═══════════════════════════════════════════════════
 function Library:Destroy()
     for _, c in ipairs(_conns) do pcall(function() c:Disconnect() end) end
     _conns = {}
     Library.Flags = {}
     if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
+end
+
+-- ═══════════════════════════════════════════════════
+--  LIVE PREVIEW SYNC (FOV FILLED TOGGLE)
+-- ═══════════════════════════════════════════════════
+function Library:UpdateFOVPreview(radius, visible, filled, color)
+    if LivePreviews.FOVCircle then
+        LivePreviews.FOVCircle.Radius = radius or 150
+        LivePreviews.FOVCircle.Visible = visible or false
+        LivePreviews.FOVCircle.Filled = filled or false
+        LivePreviews.FOVCircle.Color = color or T.accent
+    end
 end
 
 return Library
