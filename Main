@@ -1,13 +1,16 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
-║              ANNOMALY UI LIB  v1.0 FINAL+FIX                   ║
+║              ANNOMALY UI LIB  v1.1 FIXED                     ║
 ║         sacaleche — con live preview real de ESP/FOV         ║
 ║              UNDETECTABLE + COMPLETE + BUG FIX               ║
 ╚══════════════════════════════════════════════════════════════╝
 
-  FIX v1.1:
-  > Corregido el bug donde el ToggleKey del menú no se actualizaba.
-  > Ahora el ToggleKey se almacena en `Win.ToggleKey` y es modificable.
+  FIXES v1.1:
+  > [FIX 1] Notificaciones: Library:Notify ahora respeta Library.ShowNotifs.
+            Elem.Toggle ya no bypassea el flag al llamar Notify directamente.
+  > [FIX 2] ToggleKey: Se añadió Library._bindingKey para bloquear el toggle
+            del menú mientras el Keybind widget está esperando una nueva tecla,
+            evitando que el keypress del rebind también dispare el toggle.
 ]]
 
 -- ═══════════════════════════════════════════════════
@@ -108,9 +111,17 @@ end
 -- ═══════════════════════════════════════════════════
 --  LIBRARY
 -- ═══════════════════════════════════════════════════
-local Library   = {}
-Library.__index = Library
-Library.Flags   = {}
+local Library     = {}
+Library.__index   = Library
+Library.Flags     = {}
+
+-- [FIX 1] Flag global para controlar si las notificaciones están activas.
+-- CreateWindow lo sincroniza con opts.Notifications.
+Library.ShowNotifs = true
+
+-- [FIX 2] Flag global: true mientras un Keybind está esperando input.
+-- El hook del ToggleKey lo revisa antes de actuar.
+Library._bindingKey = false
 
 local _conns = {}
 local function hook(sig, fn)
@@ -158,29 +169,27 @@ end
 -- ═══════════════════════════════════════════════════
 local LivePreviews = {
     FOVCircle = nil,
-    ESPBox = nil,
+    ESPBox    = nil,
 }
 
 task.spawn(function()
     if Drawing then
         pcall(function()
-            local camera = workspace.CurrentCamera
-            local fovCircle = Drawing.new("Circle")
-            fovCircle.Thickness = 2
-            fovCircle.NumSides = 64
-            fovCircle.Radius = 150
-            fovCircle.Filled = false
-            fovCircle.Visible = false
-            fovCircle.ZIndex = 999
-            fovCircle.Color = Color3.fromRGB(84, 101, 255)
+            local camera     = workspace.CurrentCamera
+            local fovCircle  = Drawing.new("Circle")
+            fovCircle.Thickness    = 2
+            fovCircle.NumSides     = 64
+            fovCircle.Radius       = 150
+            fovCircle.Filled       = false
+            fovCircle.Visible      = false
+            fovCircle.ZIndex       = 999
+            fovCircle.Color        = Color3.fromRGB(84, 101, 255)
             fovCircle.Transparency = 1
-            
             LivePreviews.FOVCircle = fovCircle
-            
             RunService.RenderStepped:Connect(function()
                 if fovCircle and fovCircle.Visible then
-                    local centerPos = camera.ViewportSize / 2
-                    fovCircle.Position = Vector2.new(centerPos.X, centerPos.Y)
+                    local cp = camera.ViewportSize / 2
+                    fovCircle.Position = Vector2.new(cp.X, cp.Y)
                 end
             end)
         end)
@@ -190,22 +199,20 @@ end)
 task.spawn(function()
     if Drawing then
         pcall(function()
-            local espBox = Drawing.new("Square")
-            espBox.Thickness = 2
-            espBox.Size = Vector2.new(100, 150)
-            espBox.Filled = false
-            espBox.Visible = false
-            espBox.ZIndex = 998
-            espBox.Color = Color3.fromRGB(0, 255, 0)
+            local espBox       = Drawing.new("Square")
+            espBox.Thickness   = 2
+            espBox.Size        = Vector2.new(100, 150)
+            espBox.Filled      = false
+            espBox.Visible     = false
+            espBox.ZIndex      = 998
+            espBox.Color       = Color3.fromRGB(0, 255, 0)
             espBox.Transparency = 1
-            
             LivePreviews.ESPBox = espBox
-            
             RunService.RenderStepped:Connect(function()
                 if espBox and espBox.Visible then
-                    local camera = workspace.CurrentCamera
-                    local centerPos = camera.ViewportSize / 2
-                    espBox.Position = Vector2.new(centerPos.X - 50, centerPos.Y - 75)
+                    local camera  = workspace.CurrentCamera
+                    local cp      = camera.ViewportSize / 2
+                    espBox.Position = Vector2.new(cp.X - 50, cp.Y - 75)
                 end
             end)
         end)
@@ -216,20 +223,20 @@ end)
 --  CUSTOM CURSOR
 -- ═══════════════════════════════════════════════════
 local CursorRoot = create("Frame", {
-    Name                 = genRandName(),
-    Size                 = UDim2.new(0, 20, 0, 20),
+    Name                   = genRandName(),
+    Size                   = UDim2.new(0, 20, 0, 20),
     BackgroundTransparency = 1,
-    ZIndex               = 9999,
-    Visible              = false,
+    ZIndex                 = 9999,
+    Visible                = false,
 }, ScreenGui)
 
 local CursorRing = create("ImageLabel", {
-    Size                 = UDim2.new(1, 0, 1, 0),
+    Size                   = UDim2.new(1, 0, 1, 0),
     BackgroundTransparency = 1,
-    Image                = "rbxassetid://3570695787",
-    ImageColor3          = T.accent,
-    ImageTransparency    = 0.3,
-    ZIndex               = 9999,
+    Image                  = "rbxassetid://3570695787",
+    ImageColor3            = T.accent,
+    ImageTransparency      = 0.3,
+    ZIndex                 = 9999,
 }, CursorRoot)
 
 local CursorDot = create("Frame", {
@@ -243,20 +250,20 @@ local CursorDot = create("Frame", {
 create("UICorner", { CornerRadius = UDim.new(1, 0) }, CursorDot)
 
 local TrailRoot = create("Frame", {
-    Name                 = genRandName(),
-    Size                 = UDim2.new(0, 14, 0, 14),
+    Name                   = genRandName(),
+    Size                   = UDim2.new(0, 14, 0, 14),
     BackgroundTransparency = 1,
-    ZIndex               = 9997,
-    Visible              = false,
+    ZIndex                 = 9997,
+    Visible                = false,
 }, ScreenGui)
 
 local TrailImg = create("ImageLabel", {
-    Size                 = UDim2.new(1, 0, 1, 0),
+    Size                   = UDim2.new(1, 0, 1, 0),
     BackgroundTransparency = 1,
-    Image                = "rbxassetid://3570695787",
-    ImageColor3          = T.accentDim,
-    ImageTransparency    = 0.7,
-    ZIndex               = 9997,
+    Image                  = "rbxassetid://3570695787",
+    ImageColor3            = T.accentDim,
+    ImageTransparency      = 0.7,
+    ZIndex                 = 9997,
 }, TrailRoot)
 
 local _trailX, _trailY = 0, 0
@@ -281,16 +288,16 @@ end
 --  NOTIFICATIONS (GLOBAL)
 -- ═══════════════════════════════════════════════════
 local NotifHolder = create("Frame", {
-    Name                 = genRandName(),
+    Name                   = genRandName(),
     BackgroundTransparency = 1,
     Position = UDim2.new(1, -245, 0, 8),
     Size     = UDim2.new(0, 235, 1, -16),
     ZIndex   = 200,
 }, ScreenGui)
 create("UIListLayout", {
-    SortOrder          = Enum.SortOrder.LayoutOrder,
-    Padding            = UDim.new(0, 3),
-    VerticalAlignment  = Enum.VerticalAlignment.Top,
+    SortOrder         = Enum.SortOrder.LayoutOrder,
+    Padding           = UDim.new(0, 3),
+    VerticalAlignment = Enum.VerticalAlignment.Top,
 }, NotifHolder)
 
 local _nIdx = 0
@@ -302,14 +309,19 @@ local NOTIF_COL = {
 }
 local NOTIF_ICON = { info="i", success="✓", warning="!", error="✕" }
 
+-- [FIX 1] Verificamos Library.ShowNotifs al inicio de Notify.
+-- Todos los callers (Elem.Toggle, Win:SaveConfig, etc.) pasan por aquí,
+-- así que con un solo check centralizado queda resuelto para todos.
 function Library:Notify(text, duration, ntype)
+    if not Library.ShowNotifs then return end  -- << FIX 1
+
     duration = duration or 3
     ntype    = ntype or "info"
     local col  = NOTIF_COL[ntype]  or T.accent
     local icon = NOTIF_ICON[ntype] or "i"
     _nIdx += 1
     local wrap = create("Frame", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Size        = UDim2.new(1, 0, 0, 28),
         LayoutOrder = _nIdx,
@@ -328,7 +340,7 @@ function Library:Notify(text, duration, ntype)
         Size = UDim2.new(0, 3, 1, 0), ZIndex = 202,
     }, card)
     create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position           = UDim2.new(0, 8, 0, 0),
         Size               = UDim2.new(0, 14, 1, 0),
@@ -340,7 +352,7 @@ function Library:Notify(text, duration, ntype)
         ZIndex             = 202,
     }, card)
     create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position           = UDim2.new(0, 24, 0, 0),
         Size               = UDim2.new(1, -28, 1, 0),
@@ -402,7 +414,7 @@ function Elem.Toggle(parent, bd, opts)
     local st = def
 
     local Btn = create("TextButton", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Size             = UDim2.new(1, 0, 0, h),
         Text             = "",
@@ -419,7 +431,7 @@ function Elem.Toggle(parent, bd, opts)
     }, Btn)
 
     local Lb = create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position     = UDim2.new(0, 24, 0, 0),
         Size         = UDim2.new(0, 210, 0, desc and 17 or h),
@@ -432,7 +444,7 @@ function Elem.Toggle(parent, bd, opts)
 
     if desc then
         create("TextLabel", {
-            Name                 = genRandName(),
+            Name                   = genRandName(),
             BackgroundTransparency = 1,
             Position     = UDim2.new(0, 24, 0, 16),
             Size         = UDim2.new(0, 210, 0, 12),
@@ -466,6 +478,8 @@ function Elem.Toggle(parent, bd, opts)
     Btn.MouseButton1Down:Connect(function()
         st = not st; upd()
         callback(st)
+        -- [FIX 1] Library:Notify ya verifica Library.ShowNotifs internamente,
+        -- así que esta llamada es segura sin guardia adicional aquí.
         Library:Notify(text .. " " .. (st and "enabled" or "disabled"), 2, st and "success" or "warning")
     end)
 
@@ -496,13 +510,13 @@ function Elem.Slider(parent, bd, opts)
     local fmtStr = decimals > 0 and ("%." .. decimals .. "f") or "%d"
 
     local F = create("Frame", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 37),
     }, parent)
 
     local ST2 = create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 5),
         Size     = UDim2.new(0, 170, 0, 13),
@@ -512,7 +526,7 @@ function Elem.Slider(parent, bd, opts)
     }, F)
 
     local SV = create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 5),
         Size     = UDim2.new(0, SLIDER_W + 1, 0, 13),
@@ -633,13 +647,13 @@ function Elem.Dropdown(parent, bd, opts)
     local sel = def
 
     local W2 = create("Frame", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 46),
     }, parent)
 
     local DT = create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 5),  Size = UDim2.new(0, 200, 0, 13),
         Font = Enum.Font.Ubuntu, Text = text,
@@ -655,7 +669,7 @@ function Elem.Dropdown(parent, bd, opts)
     }, W2)
 
     local DBT = create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 6, 0, 0), Size = UDim2.new(0, 240, 1, 0),
         Font = Enum.Font.Ubuntu, Text = tostring(sel or ""),
@@ -663,7 +677,7 @@ function Elem.Dropdown(parent, bd, opts)
         TextXAlignment = Enum.TextXAlignment.Left,
     }, DB)
     create("ImageLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 245, 0, 8), Size = UDim2.new(0, 6, 0, 4),
         Image = "rbxassetid://6724771531", ImageColor3 = T.txtNormal,
@@ -727,7 +741,7 @@ function Elem.Dropdown(parent, bd, opts)
                 AutoButtonColor = false, Text = "", ZIndex = 50,
             }, DS)
             local OT = create("TextLabel", {
-                Name                 = genRandName(),
+                Name                   = genRandName(),
                 BackgroundTransparency = 1,
                 Position = UDim2.new(0, 7, 0, 0), Size = UDim2.new(0, 246, 1, 0),
                 Font = Enum.Font.Ubuntu, Text = tostring(opt),
@@ -787,13 +801,13 @@ function Elem.Keybind(parent, bd, opts)
     local binding = false
 
     local Btn = create("TextButton", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 19),
         Text = "", AutoButtonColor = false,
     }, parent)
 
     local Lb = create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0, 160, 1, 0),
         Font = Enum.Font.Ubuntu, Text = text,
@@ -823,11 +837,14 @@ function Elem.Keybind(parent, bd, opts)
     end)
     KL.MouseButton1Down:Connect(function()
         if binding then return end
-        binding = true; KL.Text = "[...]"
+        binding = true
+        Library._bindingKey = true  -- [FIX 2] Bloquea el toggle del menú
+        KL.Text = "[...]"
         tw(KL, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {TextColor3=T.txtAccent})
         local cn; cn = hook(UIS.InputBegan, function(inp)
             if inp.UserInputType == Enum.UserInputType.Keyboard then
                 binding = false
+                Library._bindingKey = false  -- [FIX 2] Desbloquea el toggle del menú
                 if inp.KeyCode == Enum.KeyCode.Escape or inp.KeyCode == Enum.KeyCode.Backspace then
                     key = nil; KL.Text = "[none]"
                 else
@@ -852,10 +869,10 @@ end
 -- ── COLOR PICKER (CON LIVE PREVIEW) ─────────────────
 function Elem.ColorPicker(parent, bd, opts)
     opts = opts or {}
-    local text     = opts.Text     or "Color"
-    local def      = opts.Default  or Color3.new(1,1,1)
-    local callback = opts.Callback or function() end
-    local flag     = opts.Flag
+    local text        = opts.Text        or "Color"
+    local def         = opts.Default     or Color3.new(1,1,1)
+    local callback    = opts.Callback    or function() end
+    local flag        = opts.Flag
     local previewType = opts.PreviewType
 
     bd.Size = bd.Size + UDim2.new(0, 0, 0, 19)
@@ -863,15 +880,15 @@ function Elem.ColorPicker(parent, bd, opts)
     local ch, cs, cv = Color3.toHSV(color)
 
     local Row = create("TextButton", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 19),
         Text = "",
         AutoButtonColor = false,
     }, parent)
-    
+
     local CL = create("TextLabel", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 8, 0, 0),
         Size     = UDim2.new(0, 200, 1, 0),
@@ -881,7 +898,7 @@ function Elem.ColorPicker(parent, bd, opts)
         TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
     }, Row)
-    
+
     local CB = create("TextButton", {
         Name             = genRandName(),
         AnchorPoint = Vector2.new(1, 0.5),
@@ -892,7 +909,7 @@ function Elem.ColorPicker(parent, bd, opts)
         AutoButtonColor = false,
         Text = "",
     }, Row)
-    
+
     Row.MouseEnter:Connect(function()
         tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtBright})
     end)
@@ -932,7 +949,7 @@ function Elem.ColorPicker(parent, bd, opts)
             ColorSequenceKeypoint.new(1,    Color3.fromRGB(255,0,0)),
         },
     }, HB)
-    
+
     local HP = create("Frame", {
         Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1),
@@ -952,7 +969,7 @@ function Elem.ColorPicker(parent, bd, opts)
         Text = "",
         ZIndex = 101,
     }, CF)
-    
+
     local SO = create("Frame", {
         Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1),
@@ -970,7 +987,7 @@ function Elem.ColorPicker(parent, bd, opts)
             NumberSequenceKeypoint.new(1,1),
         },
     }, SO)
-    
+
     local VO = create("Frame", {
         Name             = genRandName(),
         BackgroundColor3 = Color3.new(0,0,0),
@@ -985,7 +1002,7 @@ function Elem.ColorPicker(parent, bd, opts)
             NumberSequenceKeypoint.new(1,0),
         },
     }, VO)
-    
+
     local CP = create("Frame", {
         Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1),
@@ -994,9 +1011,9 @@ function Elem.ColorPicker(parent, bd, opts)
         Position = UDim2.new(cs,-1,1-cv,-1),
         ZIndex = 104,
     }, CM)
-    
+
     local CMH = create("TextButton", {
-        Name                 = genRandName(),
+        Name                   = genRandName(),
         BackgroundTransparency = 1,
         Size = UDim2.new(1,0,1,0),
         Text = "",
@@ -1010,7 +1027,6 @@ function Elem.ColorPicker(parent, bd, opts)
         CM.BackgroundColor3 = Color3.fromHSV(ch, 1, 1)
         CP.Position = UDim2.new(cs, -1, 1-cv, -1)
         HP.Position = UDim2.new(0, 0, ch, -1)
-        
         if previewType == "fov" and LivePreviews.FOVCircle then
             LivePreviews.FOVCircle.Color = color
         elseif previewType == "esp_visible" and LivePreviews.ESPBox then
@@ -1018,7 +1034,6 @@ function Elem.ColorPicker(parent, bd, opts)
         elseif previewType == "esp_hidden" and LivePreviews.ESPBox then
             LivePreviews.ESPBox.Color = color
         end
-        
         callback(color)
     end
 
@@ -1036,11 +1051,11 @@ function Elem.ColorPicker(parent, bd, opts)
             end
         end)
     end)
-    
+
     HB.MouseButton1Down:Connect(function()
         local function u()
-            local y=math.clamp(mouse.Y-HB.AbsolutePosition.Y,0,HB.AbsoluteSize.Y)
-            ch=y/HB.AbsoluteSize.Y
+            local y = math.clamp(mouse.Y-HB.AbsolutePosition.Y,0,HB.AbsoluteSize.Y)
+            ch = y/HB.AbsoluteSize.Y
             updP()
         end
         u()
@@ -1066,7 +1081,6 @@ function Elem.ColorPicker(parent, bd, opts)
         local bp = CB.AbsolutePosition
         CF.Position = UDim2.new(0, bp.X+CB.AbsoluteSize.X+6, 0, bp.Y-10)
         CF.Visible = true
-        
         if previewType == "fov" and LivePreviews.FOVCircle then
             LivePreviews.FOVCircle.Visible = true
             LivePreviews.FOVCircle.Color = color
@@ -1075,12 +1089,12 @@ function Elem.ColorPicker(parent, bd, opts)
             LivePreviews.ESPBox.Color = color
         end
     end)
-    
+
     CF.MouseEnter:Connect(function() iCF=true end)
     CF.MouseLeave:Connect(function() iCF=false end)
     CB.MouseEnter:Connect(function() iCB2=true end)
     CB.MouseLeave:Connect(function() iCB2=false end)
-    
+
     hook(UIS.InputBegan, function(inp)
         if (inp.UserInputType==Enum.UserInputType.MouseButton1 or
             inp.UserInputType==Enum.UserInputType.MouseButton2)
@@ -1123,10 +1137,10 @@ function Elem.Button(parent, bd, opts)
     local callback = opts.Callback or function() end
 
     local bgMap = {
-        default = {T.bg2,    T.bg3,                            T.accent},
-        accent  = {T.accentDim, T.accent,                      T.accent},
-        danger  = {Color3.fromRGB(90,22,22),  Color3.fromRGB(130,32,32),  T.red},
-        success = {Color3.fromRGB(20,68,40),  Color3.fromRGB(28,90,52),   T.green},
+        default = {T.bg2,    T.bg3,                           T.accent},
+        accent  = {T.accentDim, T.accent,                     T.accent},
+        danger  = {Color3.fromRGB(90,22,22), Color3.fromRGB(130,32,32), T.red},
+        success = {Color3.fromRGB(20,68,40), Color3.fromRGB(28,90,52),  T.green},
     }
     local c = bgMap[style] or bgMap.default
 
@@ -1414,14 +1428,18 @@ end
 -- ═══════════════════════════════════════════════════
 function Library:CreateWindow(opts)
     opts = opts or {}
-    
+
     local Win = {}
-    
+
     Win.Title      = opts.Title      or "annomalyui"
     Win.Subtitle   = opts.Subtitle   or "universal"
     Win.Version    = opts.Version    or "1.0"
     Win.ToggleKey  = opts.ToggleKey  or Enum.KeyCode.End
     Win.ShowNotifs = opts.Notifications ~= false
+
+    -- [FIX 1] Sincronizamos el flag global con la opción de esta ventana.
+    -- Library:Notify lo leerá antes de mostrar cualquier notificación.
+    Library.ShowNotifs = Win.ShowNotifs
 
     local Main = create("ImageButton", {
         Name             = LEGIT_FRAME_NAMES[math.random(1, #LEGIT_FRAME_NAMES)],
@@ -1508,15 +1526,18 @@ function Library:CreateWindow(opts)
         Position = UDim2.new(0,100,0,31), Size = UDim2.new(0,586,0,452),
     }, Main)
 
-    -- --- FIX: Listener ahora lee Win.ToggleKey en cada pulsación ---
+    -- [FIX 2] El hook del toggle ahora verifica Library._bindingKey.
+    -- Si un Keybind está esperando input, este hook no actúa, evitando
+    -- que la tecla nueva también dispare accidentalmente el toggle.
     hook(UIS.InputBegan, function(key)
         if UIS:GetFocusedTextBox() then return end
+        if Library._bindingKey then return end  -- << FIX 2
         if key.KeyCode == Win.ToggleKey then
             Main.Visible = not Main.Visible
             setCursorVisible(Main.Visible)
         end
     end)
-    
+
     hook(RunService.RenderStepped, function()
         if Main and Main.Visible then
             UIS.MouseIconEnabled = false
@@ -1529,8 +1550,8 @@ function Library:CreateWindow(opts)
         end
     end)
 
-    local _footerParts   = {}
-    local _firstTab      = true
+    local _footerParts    = {}
+    local _firstTab       = true
     local _selectedTabBtn = nil
 
     task.spawn(function()
@@ -1539,12 +1560,20 @@ function Library:CreateWindow(opts)
             local status = #_footerParts > 0
                 and table.concat(_footerParts, " | ")
                 or "idle"
-            FooterText.Text      = "> [" .. Win.ToggleKey.Name:lower() .. "]  " .. status
+            FooterText.Text       = "> [" .. Win.ToggleKey.Name:lower() .. "]  " .. status
             FooterText.TextColor3 = #_footerParts > 0 and T.txtAccent or T.txtNormal
         end
     end)
 
     function Win:SetFooterParts(parts) _footerParts = parts or {} end
+
+    -- Método helper para cambiar el ToggleKey de forma explícita y segura.
+    -- Úsalo en el callback de un Keybind: Win:SetToggleKey(newKey)
+    function Win:SetToggleKey(newKey)
+        if newKey then
+            Win.ToggleKey = newKey
+        end
+    end
 
     function Win:CreateTab(tabOpts)
         tabOpts = tabOpts or {}
@@ -1625,7 +1654,7 @@ function Library:CreateWindow(opts)
             if _selectedTabBtn~=TB then tw(TL, TweenInfo.new(0.12,Enum.EasingStyle.Quad), {TextColor3=T.txtNormal}) end
         end)
 
-        local _firstSec      = true
+        local _firstSec       = true
         local _selectedSecBtn = nil
 
         local TabObj = {}
@@ -1775,6 +1804,9 @@ function Library:CreateWindow(opts)
     end
 
     task.delay(1, function()
+        -- Library:Notify ya chequea Library.ShowNotifs internamente,
+        -- pero mantenemos el guard de Win.ShowNotifs aquí también
+        -- para coherencia con el resto del código de Win.
         if Win.ShowNotifs then
             Library:Notify(Win.Title:lower() .. " v" .. Win.Version .. " ready", 3.5, "info")
             Library:Notify("[" .. Win.ToggleKey.Name:lower() .. "] toggle", 3, "info")
@@ -1796,16 +1828,16 @@ end
 -- ═══════════════════════════════════════════════════
 function Library:UpdateFOVPreview(radius, visible, filled, color)
     if LivePreviews.FOVCircle then
-        if radius then LivePreviews.FOVCircle.Radius = radius end
+        if radius  then LivePreviews.FOVCircle.Radius  = radius  end
         if visible ~= nil then LivePreviews.FOVCircle.Visible = visible end
-        if filled ~= nil then LivePreviews.FOVCircle.Filled = filled end
-        if color then LivePreviews.FOVCircle.Color = color end
+        if filled  ~= nil then LivePreviews.FOVCircle.Filled  = filled  end
+        if color   then LivePreviews.FOVCircle.Color   = color   end
     end
 end
 
 function Library:UpdateESPPreview(color, visible)
     if LivePreviews.ESPBox then
-        if color then LivePreviews.ESPBox.Color = color end
+        if color   then LivePreviews.ESPBox.Color   = color   end
         if visible ~= nil then LivePreviews.ESPBox.Visible = visible end
     end
 end
