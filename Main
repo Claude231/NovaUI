@@ -1,82 +1,13 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
-║              ANNOMALY UI LIB  v1.0 FINAL                     ║
+║              ANNOMALY UI LIB  v1.0 FINAL+FIX                   ║
 ║         sacaleche — con live preview real de ESP/FOV         ║
-║              UNDETECTABLE + COMPLETE                         ║
+║              UNDETECTABLE + COMPLETE + BUG FIX               ║
 ╚══════════════════════════════════════════════════════════════╝
 
-  API
-  ───
-  local Lib = loadstring(...)()
-
-  local Win = Lib:CreateWindow({
-      Title     = "MyHub",
-      Subtitle  = "universal",
-      Version   = "1.0",
-      ToggleKey = Enum.KeyCode.End,
-  })
-
-  local Tab = Win:CreateTab({ Name = "combat" })
-  local L, R = Tab:CreateSection("silent aim")
-  local s = L:AddSector("settings")
-  
-  s:AddToggle({
-      Text = "enabled", Default = false,
-      Description = "optional subtext",
-      Flag = "myFlag", Callback = function(v) end
-  })
-  
-  s:AddSlider({
-      Text = "hit chance", Min = 0, Max = 100, Default = 50,
-      Suffix = "%", Decimals = 0,
-      Flag = "mySlider", Callback = function(v) end
-  })
-  
-  s:AddDropdown({
-      Text = "target", List = {"Head","HRP"}, Default = "Head",
-      Flag = "myDD", Callback = function(v) end
-  })
-  
-  s:AddKeybind({
-      Text = "key", Default = Enum.KeyCode.E,
-      Flag = "myKey", Callback = function(v) end
-  })
-  
-  s:AddColorPicker({
-      Text = "color", Default = Color3.fromRGB(84,101,255),
-      PreviewType = "fov",  -- "fov", "esp_visible", "esp_hidden"
-      Flag = "myColor", Callback = function(c) end
-  })
-  
-  s:AddButton({ Text = "execute", Style = "accent", Callback = function() end })
-  s:AddTextBox({ Placeholder = "type here...", Numeric = false,
-      ClearOnFocus = true, Callback = function(v, enter) end })
-  s:AddLabel("info text", "optional subtext")
-  s:AddSeparator()
-  s:AddParagraph({ Title = "Note", Content = "some text here" })
-
-  -- notifications
-  Lib:Notify("text", 3, "info")   -- info | success | warning | error
-
-  -- flags
-  Lib.Flags["myFlag"]:Set(true)
-  print(Lib.Flags["myFlag"].Value)
-
-  -- config system
-  Win:SaveConfig("name")
-  Win:LoadConfig("name")
-  Win:DeleteConfig("name")
-  Win:ListConfigs()
-  Win:SetAutoLoad("name")
-  Win:ClearAutoLoad()
-  Win:GetAutoLoad()
-
-  -- footer
-  Win:SetFooterParts({ "aim", "esp" })
-  
-  -- preview helpers
-  Lib:UpdateFOVPreview(radius, visible, filled, color)
-  Lib:UpdateESPPreview(color, visible)
+  FIX v1.1:
+  > Corregido el bug donde el ToggleKey del menú no se actualizaba.
+  > Ahora el ToggleKey se almacena en `Win.ToggleKey` y es modificable.
 ]]
 
 -- ═══════════════════════════════════════════════════
@@ -230,7 +161,6 @@ local LivePreviews = {
     ESPBox = nil,
 }
 
--- Crear FOV Circle preview
 task.spawn(function()
     if Drawing then
         pcall(function()
@@ -257,7 +187,6 @@ task.spawn(function()
     end
 end)
 
--- Crear ESP Box preview
 task.spawn(function()
     if Drawing then
         pcall(function()
@@ -927,7 +856,7 @@ function Elem.ColorPicker(parent, bd, opts)
     local def      = opts.Default  or Color3.new(1,1,1)
     local callback = opts.Callback or function() end
     local flag     = opts.Flag
-    local previewType = opts.PreviewType  -- "fov", "esp_visible", "esp_hidden"
+    local previewType = opts.PreviewType
 
     bd.Size = bd.Size + UDim2.new(0, 0, 0, 19)
     local color     = def
@@ -971,7 +900,6 @@ function Elem.ColorPicker(parent, bd, opts)
         tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtNormal})
     end)
 
-    -- Picker popup (EXACTO DEL SCRIPT ORIGINAL)
     local CF = create("Frame", {
         Name             = genRandName(),
         BackgroundColor3 = T.bg1,
@@ -982,7 +910,6 @@ function Elem.ColorPicker(parent, bd, opts)
     }, ScreenGui)
     setDraggable(CF)
 
-    -- Hue bar
     local HB = create("TextButton", {
         Name             = genRandName(),
         BackgroundColor3 = Color3.new(1,1,1),
@@ -1015,7 +942,6 @@ function Elem.ColorPicker(parent, bd, opts)
         ZIndex = 102,
     }, HB)
 
-    -- Color matrix
     local CM = create("TextButton", {
         Name             = genRandName(),
         BackgroundColor3 = Color3.fromHSV(ch,1,1),
@@ -1078,7 +1004,6 @@ function Elem.ColorPicker(parent, bd, opts)
         AutoButtonColor = false,
     }, CM)
 
-    -- Update function con LIVE PREVIEW
     local function updP()
         color = Color3.fromHSV(ch, cs, cv)
         CB.BackgroundColor3 = color
@@ -1086,7 +1011,6 @@ function Elem.ColorPicker(parent, bd, opts)
         CP.Position = UDim2.new(cs, -1, 1-cv, -1)
         HP.Position = UDim2.new(0, 0, ch, -1)
         
-        -- ACTUALIZAR LIVE PREVIEW según tipo
         if previewType == "fov" and LivePreviews.FOVCircle then
             LivePreviews.FOVCircle.Color = color
         elseif previewType == "esp_visible" and LivePreviews.ESPBox then
@@ -1098,7 +1022,6 @@ function Elem.ColorPicker(parent, bd, opts)
         callback(color)
     end
 
-    -- Mouse handlers
     CMH.MouseButton1Down:Connect(function()
         local function u()
             cs = math.clamp(mouse.X-CM.AbsolutePosition.X,0,CM.AbsoluteSize.X)/CM.AbsoluteSize.X
@@ -1133,7 +1056,6 @@ function Elem.ColorPicker(parent, bd, opts)
     CB.MouseButton1Down:Connect(function()
         if CF.Visible then
             CF.Visible=false
-            -- Ocultar preview al cerrar
             if previewType == "fov" and LivePreviews.FOVCircle then
                 LivePreviews.FOVCircle.Visible = false
             elseif (previewType == "esp_visible" or previewType == "esp_hidden") and LivePreviews.ESPBox then
@@ -1145,7 +1067,6 @@ function Elem.ColorPicker(parent, bd, opts)
         CF.Position = UDim2.new(0, bp.X+CB.AbsoluteSize.X+6, 0, bp.Y-10)
         CF.Visible = true
         
-        -- Mostrar preview al abrir
         if previewType == "fov" and LivePreviews.FOVCircle then
             LivePreviews.FOVCircle.Visible = true
             LivePreviews.FOVCircle.Color = color
@@ -1165,7 +1086,6 @@ function Elem.ColorPicker(parent, bd, opts)
             inp.UserInputType==Enum.UserInputType.MouseButton2)
             and CF.Visible and not iCF and not iCB2 then
             CF.Visible = false
-            -- Ocultar preview al cerrar con click fuera
             if previewType == "fov" and LivePreviews.FOVCircle then
                 LivePreviews.FOVCircle.Visible = false
             elseif (previewType == "esp_visible" or previewType == "esp_hidden") and LivePreviews.ESPBox then
@@ -1494,11 +1414,14 @@ end
 -- ═══════════════════════════════════════════════════
 function Library:CreateWindow(opts)
     opts = opts or {}
-    local Title      = opts.Title      or "annomalyui"
-    local Subtitle   = opts.Subtitle   or "universal"
-    local Version    = opts.Version    or "1.0"
-    local ToggleKey  = opts.ToggleKey  or Enum.KeyCode.End
-    local ShowNotifs = opts.Notifications ~= false
+    
+    local Win = {}
+    
+    Win.Title      = opts.Title      or "annomalyui"
+    Win.Subtitle   = opts.Subtitle   or "universal"
+    Win.Version    = opts.Version    or "1.0"
+    Win.ToggleKey  = opts.ToggleKey  or Enum.KeyCode.End
+    Win.ShowNotifs = opts.Notifications ~= false
 
     local Main = create("ImageButton", {
         Name             = LEGIT_FRAME_NAMES[math.random(1, #LEGIT_FRAME_NAMES)],
@@ -1527,17 +1450,17 @@ function Library:CreateWindow(opts)
         Size = UDim2.new(1,0,0,1), ZIndex = 3,
     }, Main)
 
-    local titleTag = Subtitle ~= "" and Subtitle:lower() or "ui"
+    local titleTag = Win.Subtitle ~= "" and Win.Subtitle:lower() or "ui"
     create("TextLabel", {
         Name=genRandName(),
         AnchorPoint = Vector2.new(0.5, 0),
         BackgroundTransparency = 1,
         Position = UDim2.new(0.5,0,0,1), Size = UDim2.new(1,-22,0,29),
         Font = Enum.Font.Ubuntu,
-        Text = '<font color="rgb(84,101,255)">'..Title:lower()..'</font>'..
+        Text = '<font color="rgb(84,101,255)">'..Win.Title:lower()..'</font>'..
                '<font color="rgb(35,35,35)"> //</font>'..
                '<font color="rgb(90,90,90)"> '..titleTag..'</font>'..
-               '<font color="rgb(35,35,35)">  v'..Version..'</font>',
+               '<font color="rgb(35,35,35)">  v'..Win.Version..'</font>',
         TextColor3 = T.txtBright, TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
         RichText = true, ZIndex = 2,
@@ -1585,14 +1508,15 @@ function Library:CreateWindow(opts)
         Position = UDim2.new(0,100,0,31), Size = UDim2.new(0,586,0,452),
     }, Main)
 
+    -- --- FIX: Listener ahora lee Win.ToggleKey en cada pulsación ---
     hook(UIS.InputBegan, function(key)
         if UIS:GetFocusedTextBox() then return end
-        if key.KeyCode == ToggleKey then
+        if key.KeyCode == Win.ToggleKey then
             Main.Visible = not Main.Visible
             setCursorVisible(Main.Visible)
         end
     end)
-
+    
     hook(RunService.RenderStepped, function()
         if Main and Main.Visible then
             UIS.MouseIconEnabled = false
@@ -1605,7 +1529,6 @@ function Library:CreateWindow(opts)
         end
     end)
 
-    local Win            = {}
     local _footerParts   = {}
     local _firstTab      = true
     local _selectedTabBtn = nil
@@ -1616,7 +1539,7 @@ function Library:CreateWindow(opts)
             local status = #_footerParts > 0
                 and table.concat(_footerParts, " | ")
                 or "idle"
-            FooterText.Text      = "> [" .. ToggleKey.Name:lower() .. "]  " .. status
+            FooterText.Text      = "> [" .. Win.ToggleKey.Name:lower() .. "]  " .. status
             FooterText.TextColor3 = #_footerParts > 0 and T.txtAccent or T.txtNormal
         end
     end)
@@ -1791,7 +1714,7 @@ function Library:CreateWindow(opts)
             end
         end
         local ok = cfgSave(name, data)
-        if ShowNotifs then
+        if Win.ShowNotifs then
             Library:Notify(ok and ("saved: " .. name) or "save failed", 2.5,
                            ok and "success" or "error")
         end
@@ -1801,7 +1724,7 @@ function Library:CreateWindow(opts)
     function Win:LoadConfig(name, applyFn)
         local data = cfgLoad(name)
         if not data then
-            if ShowNotifs then Library:Notify("config not found", 2.5, "error") end
+            if Win.ShowNotifs then Library:Notify("config not found", 2.5, "error") end
             return false
         end
         if applyFn then
@@ -1812,26 +1735,26 @@ function Library:CreateWindow(opts)
                 if obj then pcall(function() obj:Silent(v) end) end
             end
         end
-        if ShowNotifs then Library:Notify("loaded: " .. name, 2.5, "success") end
+        if Win.ShowNotifs then Library:Notify("loaded: " .. name, 2.5, "success") end
         return true
     end
 
     function Win:DeleteConfig(name)
         cfgDel(name)
         if cfgGetAuto() == name then cfgClearAuto() end
-        if ShowNotifs then Library:Notify("deleted: " .. name, 2.5, "warning") end
+        if Win.ShowNotifs then Library:Notify("deleted: " .. name, 2.5, "warning") end
     end
 
     function Win:ListConfigs() return cfgList() end
 
     function Win:SetAutoLoad(name)
         cfgSetAuto(name)
-        if ShowNotifs then Library:Notify("autoload: " .. name, 2.5, "info") end
+        if Win.ShowNotifs then Library:Notify("autoload: " .. name, 2.5, "info") end
     end
 
     function Win:ClearAutoLoad()
         cfgClearAuto()
-        if ShowNotifs then Library:Notify("autoload cleared", 2.5, "warning") end
+        if Win.ShowNotifs then Library:Notify("autoload cleared", 2.5, "warning") end
     end
 
     function Win:GetAutoLoad() return cfgGetAuto() end
@@ -1852,9 +1775,9 @@ function Library:CreateWindow(opts)
     end
 
     task.delay(1, function()
-        if ShowNotifs then
-            Library:Notify(Title:lower() .. " v" .. Version .. " ready", 3.5, "info")
-            Library:Notify("[" .. ToggleKey.Name:lower() .. "] toggle", 3, "info")
+        if Win.ShowNotifs then
+            Library:Notify(Win.Title:lower() .. " v" .. Win.Version .. " ready", 3.5, "info")
+            Library:Notify("[" .. Win.ToggleKey.Name:lower() .. "] toggle", 3, "info")
         end
     end)
 
