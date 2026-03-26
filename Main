@@ -1,8 +1,8 @@
 --[[
 ╔══════════════════════════════════════════════════════════════╗
-║              ANNOMALY UI LIB  v1.0                           ║
-║         sacaleche — annomaly x aesthetic + lib api           ║
-║              UNDETECTABLE VERSION                            ║
+║              ANNOMALY UI LIB  v1.0 FINAL                     ║
+║         sacaleche — con live preview real de ESP/FOV         ║
+║              UNDETECTABLE + COMPLETE                         ║
 ╚══════════════════════════════════════════════════════════════╝
 
   API
@@ -17,32 +17,37 @@
   })
 
   local Tab = Win:CreateTab({ Name = "combat" })
-
   local L, R = Tab:CreateSection("silent aim")
-
   local s = L:AddSector("settings")
+  
   s:AddToggle({
       Text = "enabled", Default = false,
       Description = "optional subtext",
       Flag = "myFlag", Callback = function(v) end
   })
+  
   s:AddSlider({
       Text = "hit chance", Min = 0, Max = 100, Default = 50,
       Suffix = "%", Decimals = 0,
       Flag = "mySlider", Callback = function(v) end
   })
+  
   s:AddDropdown({
       Text = "target", List = {"Head","HRP"}, Default = "Head",
       Flag = "myDD", Callback = function(v) end
   })
+  
   s:AddKeybind({
       Text = "key", Default = Enum.KeyCode.E,
       Flag = "myKey", Callback = function(v) end
   })
+  
   s:AddColorPicker({
       Text = "color", Default = Color3.fromRGB(84,101,255),
+      PreviewType = "fov",  -- "fov", "esp_visible", "esp_hidden"
       Flag = "myColor", Callback = function(c) end
   })
+  
   s:AddButton({ Text = "execute", Style = "accent", Callback = function() end })
   s:AddTextBox({ Placeholder = "type here...", Numeric = false,
       ClearOnFocus = true, Callback = function(v, enter) end })
@@ -53,7 +58,7 @@
   -- notifications
   Lib:Notify("text", 3, "info")   -- info | success | warning | error
 
-  -- flags (access any element globally)
+  -- flags
   Lib.Flags["myFlag"]:Set(true)
   print(Lib.Flags["myFlag"].Value)
 
@@ -68,34 +73,11 @@
 
   -- footer
   Win:SetFooterParts({ "aim", "esp" })
+  
+  -- preview helpers
+  Lib:UpdateFOVPreview(radius, visible, filled, color)
+  Lib:UpdateESPPreview(color, visible)
 ]]
-
--- ═══════════════════════════════════════════════════
---  ANTI-DETECTION LAYER
--- ═══════════════════════════════════════════════════
-
--- Randomización de nombres para evasión
-local function genRandName()
-    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    local name = ""
-    for i = 1, math.random(8, 12) do
-        local idx = math.random(1, #chars)
-        name = name .. chars:sub(idx, idx)
-    end
-    return name
-end
-
--- Nombres legítimos que anti-cheats ignoran
-local LEGIT_GUI_NAMES = {
-    "Backpack", "PlayerList", "Chat", "Freecam", "HealthBar",
-    "Topbar", "BottomBar", "Notifications", "CorePackages",
-    "PlayerScripts", "StarterGui", "ControlGui", "TouchGui"
-}
-
-local LEGIT_FRAME_NAMES = {
-    "Background", "Container", "Holder", "Frame", "Panel",
-    "MainFrame", "Display", "Interface", "UI", "HUD"
-}
 
 -- ═══════════════════════════════════════════════════
 --  SERVICES
@@ -108,6 +90,30 @@ local CoreGui     = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local lp          = Players.LocalPlayer
 local mouse       = lp:GetMouse()
+
+-- ═══════════════════════════════════════════════════
+--  ANTI-DETECTION
+-- ═══════════════════════════════════════════════════
+local function genRandName()
+    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    local name = ""
+    for i = 1, math.random(8, 12) do
+        local idx = math.random(1, #chars)
+        name = name .. chars:sub(idx, idx)
+    end
+    return name
+end
+
+local LEGIT_GUI_NAMES = {
+    "Backpack", "PlayerList", "Chat", "Freecam", "HealthBar",
+    "Topbar", "BottomBar", "Notifications", "CorePackages",
+    "PlayerScripts", "StarterGui", "ControlGui", "TouchGui"
+}
+
+local LEGIT_FRAME_NAMES = {
+    "Background", "Container", "Holder", "Frame", "Panel",
+    "MainFrame", "Display", "Interface", "UI", "HUD"
+}
 
 -- ═══════════════════════════════════════════════════
 --  THEME
@@ -192,27 +198,20 @@ local ScreenGui = create("ScreenGui", {
     IgnoreGuiInset = true,
 })
 
--- Anti-Detection: Prioridad de Parent
 do
     local success = false
-    
-    -- 1. Intentar gethui() (más indetectable)
     if gethui then
         pcall(function()
             ScreenGui.Parent = gethui()
             success = true
         end)
     end
-    
-    -- 2. Si falla, intentar CoreGui (segunda opción)
     if not success then
         pcall(function()
             ScreenGui.Parent = CoreGui
             success = true
         end)
     end
-    
-    -- 3. Último recurso: PlayerGui (más detectable pero funciona siempre)
     if not success then
         pcall(function()
             local pg = lp:WaitForChild("PlayerGui", 3)
@@ -222,6 +221,67 @@ do
         end)
     end
 end
+
+-- ═══════════════════════════════════════════════════
+--  LIVE PREVIEW SYSTEM (FOV + ESP)
+-- ═══════════════════════════════════════════════════
+local LivePreviews = {
+    FOVCircle = nil,
+    ESPBox = nil,
+}
+
+-- Crear FOV Circle preview
+task.spawn(function()
+    if Drawing then
+        pcall(function()
+            local camera = workspace.CurrentCamera
+            local fovCircle = Drawing.new("Circle")
+            fovCircle.Thickness = 2
+            fovCircle.NumSides = 64
+            fovCircle.Radius = 150
+            fovCircle.Filled = false
+            fovCircle.Visible = false
+            fovCircle.ZIndex = 999
+            fovCircle.Color = Color3.fromRGB(84, 101, 255)
+            fovCircle.Transparency = 1
+            
+            LivePreviews.FOVCircle = fovCircle
+            
+            RunService.RenderStepped:Connect(function()
+                if fovCircle and fovCircle.Visible then
+                    local centerPos = camera.ViewportSize / 2
+                    fovCircle.Position = Vector2.new(centerPos.X, centerPos.Y)
+                end
+            end)
+        end)
+    end
+end)
+
+-- Crear ESP Box preview
+task.spawn(function()
+    if Drawing then
+        pcall(function()
+            local espBox = Drawing.new("Square")
+            espBox.Thickness = 2
+            espBox.Size = Vector2.new(100, 150)
+            espBox.Filled = false
+            espBox.Visible = false
+            espBox.ZIndex = 998
+            espBox.Color = Color3.fromRGB(0, 255, 0)
+            espBox.Transparency = 1
+            
+            LivePreviews.ESPBox = espBox
+            
+            RunService.RenderStepped:Connect(function()
+                if espBox and espBox.Visible then
+                    local camera = workspace.CurrentCamera
+                    local centerPos = camera.ViewportSize / 2
+                    espBox.Position = Vector2.new(centerPos.X - 50, centerPos.Y - 75)
+                end
+            end)
+        end)
+    end
+end)
 
 -- ═══════════════════════════════════════════════════
 --  CUSTOM CURSOR
@@ -392,39 +452,6 @@ function Library:Notify(text, duration, ntype)
         if wrap.Parent then wrap:Destroy() end
     end)
 end
-
--- ═══════════════════════════════════════════════════
---  LIVE PREVIEW SYSTEM (FOV Circle)
--- ═══════════════════════════════════════════════════
-local LivePreviews = {}
-
-local function createFOVPreview()
-    local camera = workspace.CurrentCamera
-    local fovCircle = Drawing.new("Circle")
-    fovCircle.Thickness = 2
-    fovCircle.NumSides = 64
-    fovCircle.Radius = 150
-    fovCircle.Filled = false
-    fovCircle.Visible = false
-    fovCircle.ZIndex = 999
-    fovCircle.Color = Color3.fromRGB(84, 101, 255)
-    fovCircle.Transparency = 1
-    
-    LivePreviews.FOVCircle = fovCircle
-    
-    -- Update loop
-    RunService.RenderStepped:Connect(function()
-        if fovCircle and fovCircle.Visible then
-            local centerPos = camera.ViewportSize / 2
-            fovCircle.Position = Vector2.new(centerPos.X, centerPos.Y)
-        end
-    end)
-    
-    return fovCircle
-end
-
--- Inicializar preview
-task.spawn(createFOVPreview)
 
 -- ═══════════════════════════════════════════════════
 --  ELEMENT BUILDERS
@@ -893,14 +920,14 @@ function Elem.Keybind(parent, bd, opts)
     return obj
 end
 
--- ── COLOR PICKER (CON LIVE PREVIEW FUNCIONAL) ───────
+-- ── COLOR PICKER (CON LIVE PREVIEW) ─────────────────
 function Elem.ColorPicker(parent, bd, opts)
     opts = opts or {}
     local text     = opts.Text     or "Color"
     local def      = opts.Default  or Color3.new(1,1,1)
     local callback = opts.Callback or function() end
     local flag     = opts.Flag
-    local previewType = opts.PreviewType  -- "fov", "esp", etc.
+    local previewType = opts.PreviewType  -- "fov", "esp_visible", "esp_hidden"
 
     bd.Size = bd.Size + UDim2.new(0, 0, 0, 19)
     local color     = def
@@ -908,40 +935,63 @@ function Elem.ColorPicker(parent, bd, opts)
 
     local Row = create("TextButton", {
         Name                 = genRandName(),
-        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 19),
-        Text = "", AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 19),
+        Text = "",
+        AutoButtonColor = false,
     }, parent)
+    
     local CL = create("TextLabel", {
         Name                 = genRandName(),
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0, 200, 1, 0),
-        Font = Enum.Font.Ubuntu, Text = text,
-        TextColor3 = T.txtNormal, TextSize = 13,
+        Position = UDim2.new(0, 8, 0, 0),
+        Size     = UDim2.new(0, 200, 1, 0),
+        Font     = Enum.Font.Ubuntu,
+        Text     = text,
+        TextColor3 = T.txtNormal,
+        TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
     }, Row)
+    
     local CB = create("TextButton", {
         Name             = genRandName(),
-        AnchorPoint = Vector2.new(1, 0.5), BackgroundColor3 = color,
-        BorderColor3 = T.border1,
-        Position = UDim2.new(0, 267, 0.5, 0), Size = UDim2.new(0, 32, 0, 10),
-        AutoButtonColor = false, Text = "",
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundColor3 = color,
+        BorderColor3     = T.border1,
+        Position = UDim2.new(0, 267, 0.5, 0),
+        Size     = UDim2.new(0, 32, 0, 10),
+        AutoButtonColor = false,
+        Text = "",
     }, Row)
-    Row.MouseEnter:Connect(function() tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtBright}) end)
-    Row.MouseLeave:Connect(function() tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtNormal}) end)
+    
+    Row.MouseEnter:Connect(function()
+        tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtBright})
+    end)
+    Row.MouseLeave:Connect(function()
+        tw(CL, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=T.txtNormal})
+    end)
 
-    -- Picker popup
+    -- Picker popup (EXACTO DEL SCRIPT ORIGINAL)
     local CF = create("Frame", {
         Name             = genRandName(),
-        BackgroundColor3 = T.bg1, BorderColor3 = T.border1,
-        Size = UDim2.new(0, 200, 0, 200), Visible = false, ZIndex = 100,
+        BackgroundColor3 = T.bg1,
+        BorderColor3     = T.border1,
+        Size = UDim2.new(0, 200, 0, 172),
+        Visible = false,
+        ZIndex = 100,
     }, ScreenGui)
     setDraggable(CF)
 
+    -- Hue bar
     local HB = create("TextButton", {
         Name             = genRandName(),
-        BackgroundColor3 = Color3.new(1,1,1), BorderColor3 = T.border0,
-        Position = UDim2.new(0, 10, 0, 10), Size = UDim2.new(0, 20, 0, 150),
-        AutoButtonColor = false, Text = "", ZIndex = 101,
+        BackgroundColor3 = Color3.new(1,1,1),
+        BorderColor3     = T.border0,
+        Position = UDim2.new(0, 10, 0, 10),
+        Size     = UDim2.new(0, 20, 0, 150),
+        AutoButtonColor = false,
+        Text = "",
+        ZIndex = 101,
     }, CF)
     create("UIGradient", {
         Rotation = 90,
@@ -955,22 +1005,34 @@ function Elem.ColorPicker(parent, bd, opts)
             ColorSequenceKeypoint.new(1,    Color3.fromRGB(255,0,0)),
         },
     }, HB)
+    
     local HP = create("Frame", {
         Name             = genRandName(),
-        BackgroundColor3 = Color3.new(1,1,1), BorderColor3 = Color3.new(0,0,0),
-        Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, ch, -1), ZIndex = 102,
+        BackgroundColor3 = Color3.new(1,1,1),
+        BorderColor3     = Color3.new(0,0,0),
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, ch, -1),
+        ZIndex = 102,
     }, HB)
 
+    -- Color matrix
     local CM = create("TextButton", {
         Name             = genRandName(),
-        BackgroundColor3 = Color3.fromHSV(ch,1,1), BorderColor3 = T.border0,
-        Position = UDim2.new(0, 40, 0, 10), Size = UDim2.new(0, 150, 0, 150),
-        AutoButtonColor = false, Text = "", ZIndex = 101,
+        BackgroundColor3 = Color3.fromHSV(ch,1,1),
+        BorderColor3     = T.border0,
+        Position = UDim2.new(0, 40, 0, 10),
+        Size     = UDim2.new(0, 150, 0, 150),
+        AutoButtonColor = false,
+        Text = "",
+        ZIndex = 101,
     }, CF)
+    
     local SO = create("Frame", {
         Name             = genRandName(),
-        BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 0,
-        Size = UDim2.new(1,0,1,0), ZIndex = 102,
+        BackgroundColor3 = Color3.new(1,1,1),
+        BorderSizePixel  = 0,
+        Size = UDim2.new(1,0,1,0),
+        ZIndex = 102,
     }, CM)
     create("UIGradient", {
         Color = ColorSequence.new{
@@ -982,10 +1044,13 @@ function Elem.ColorPicker(parent, bd, opts)
             NumberSequenceKeypoint.new(1,1),
         },
     }, SO)
+    
     local VO = create("Frame", {
         Name             = genRandName(),
-        BackgroundColor3 = Color3.new(0,0,0), BorderSizePixel = 0,
-        Size = UDim2.new(1,0,1,0), ZIndex = 103,
+        BackgroundColor3 = Color3.new(0,0,0),
+        BorderSizePixel  = 0,
+        Size = UDim2.new(1,0,1,0),
+        ZIndex = 103,
     }, CM)
     create("UIGradient", {
         Rotation = 90,
@@ -994,56 +1059,53 @@ function Elem.ColorPicker(parent, bd, opts)
             NumberSequenceKeypoint.new(1,0),
         },
     }, VO)
+    
     local CP = create("Frame", {
         Name             = genRandName(),
-        BackgroundColor3 = Color3.new(1,1,1), BorderColor3 = Color3.new(0,0,0),
-        Size = UDim2.new(0,3,0,3), Position = UDim2.new(cs,-1,1-cv,-1), ZIndex = 104,
+        BackgroundColor3 = Color3.new(1,1,1),
+        BorderColor3     = Color3.new(0,0,0),
+        Size = UDim2.new(0,3,0,3),
+        Position = UDim2.new(cs,-1,1-cv,-1),
+        ZIndex = 104,
     }, CM)
+    
     local CMH = create("TextButton", {
         Name                 = genRandName(),
-        BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0),
-        Text = "", ZIndex = 105, AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1,0,1,0),
+        Text = "",
+        ZIndex = 105,
+        AutoButtonColor = false,
     }, CM)
 
-    -- LIVE PREVIEW REAL-TIME
-    local PreviewBg = create("Frame", {
-        Name             = genRandName(),
-        BackgroundColor3 = T.bg2, BorderColor3 = T.border0,
-        Position = UDim2.new(0, 10, 0, 170), Size = UDim2.new(0, 180, 0, 20),
-        ZIndex = 101,
-    }, CF)
-    local PreviewLabel = create("TextLabel", {
-        Name                 = genRandName(),
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        Font = Enum.Font.Ubuntu,
-        Text = "preview",
-        TextColor3 = T.txtDim,
-        TextSize = 10,
-        ZIndex = 102,
-    }, PreviewBg)
-
-    local function updPick()
+    -- Update function con LIVE PREVIEW
+    local function updP()
         color = Color3.fromHSV(ch, cs, cv)
         CB.BackgroundColor3 = color
         CM.BackgroundColor3 = Color3.fromHSV(ch, 1, 1)
         CP.Position = UDim2.new(cs, -1, 1-cv, -1)
         HP.Position = UDim2.new(0, 0, ch, -1)
         
-        -- ACTUALIZAR LIVE PREVIEW
-        if LivePreviews.FOVCircle then
+        -- ACTUALIZAR LIVE PREVIEW según tipo
+        if previewType == "fov" and LivePreviews.FOVCircle then
             LivePreviews.FOVCircle.Color = color
+        elseif previewType == "esp_visible" and LivePreviews.ESPBox then
+            LivePreviews.ESPBox.Color = color
+        elseif previewType == "esp_hidden" and LivePreviews.ESPBox then
+            LivePreviews.ESPBox.Color = color
         end
         
         callback(color)
     end
 
+    -- Mouse handlers
     CMH.MouseButton1Down:Connect(function()
         local function u()
             cs = math.clamp(mouse.X-CM.AbsolutePosition.X,0,CM.AbsoluteSize.X)/CM.AbsoluteSize.X
             cv = 1 - math.clamp(mouse.Y-CM.AbsolutePosition.Y,0,CM.AbsoluteSize.Y)/CM.AbsoluteSize.Y
-            updPick()
-        end; u()
+            updP()
+        end
+        u()
         local mc = mouse.Move:Connect(u)
         local rc; rc = UIS.InputEnded:Connect(function(inp)
             if inp.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -1051,11 +1113,14 @@ function Elem.ColorPicker(parent, bd, opts)
             end
         end)
     end)
+    
     HB.MouseButton1Down:Connect(function()
         local function u()
-            ch = math.clamp(mouse.Y-HB.AbsolutePosition.Y,0,HB.AbsoluteSize.Y)/HB.AbsoluteSize.Y
-            updPick()
-        end; u()
+            local y=math.clamp(mouse.Y-HB.AbsolutePosition.Y,0,HB.AbsoluteSize.Y)
+            ch=y/HB.AbsoluteSize.Y
+            updP()
+        end
+        u()
         local mc = mouse.Move:Connect(u)
         local rc; rc = UIS.InputEnded:Connect(function(inp)
             if inp.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -1068,40 +1133,61 @@ function Elem.ColorPicker(parent, bd, opts)
     CB.MouseButton1Down:Connect(function()
         if CF.Visible then
             CF.Visible=false
-            if LivePreviews.FOVCircle then LivePreviews.FOVCircle.Visible = false end
+            -- Ocultar preview al cerrar
+            if previewType == "fov" and LivePreviews.FOVCircle then
+                LivePreviews.FOVCircle.Visible = false
+            elseif (previewType == "esp_visible" or previewType == "esp_hidden") and LivePreviews.ESPBox then
+                LivePreviews.ESPBox.Visible = false
+            end
             return
         end
         local bp = CB.AbsolutePosition
         CF.Position = UDim2.new(0, bp.X+CB.AbsoluteSize.X+6, 0, bp.Y-10)
         CF.Visible = true
         
-        -- Mostrar preview cuando se abre el picker
-        if LivePreviews.FOVCircle then
+        -- Mostrar preview al abrir
+        if previewType == "fov" and LivePreviews.FOVCircle then
             LivePreviews.FOVCircle.Visible = true
             LivePreviews.FOVCircle.Color = color
+        elseif (previewType == "esp_visible" or previewType == "esp_hidden") and LivePreviews.ESPBox then
+            LivePreviews.ESPBox.Visible = true
+            LivePreviews.ESPBox.Color = color
         end
     end)
+    
     CF.MouseEnter:Connect(function() iCF=true end)
     CF.MouseLeave:Connect(function() iCF=false end)
     CB.MouseEnter:Connect(function() iCB2=true end)
     CB.MouseLeave:Connect(function() iCB2=false end)
+    
     hook(UIS.InputBegan, function(inp)
         if (inp.UserInputType==Enum.UserInputType.MouseButton1 or
             inp.UserInputType==Enum.UserInputType.MouseButton2)
             and CF.Visible and not iCF and not iCB2 then
             CF.Visible = false
-            if LivePreviews.FOVCircle then LivePreviews.FOVCircle.Visible = false end
+            -- Ocultar preview al cerrar con click fuera
+            if previewType == "fov" and LivePreviews.FOVCircle then
+                LivePreviews.FOVCircle.Visible = false
+            elseif (previewType == "esp_visible" or previewType == "esp_hidden") and LivePreviews.ESPBox then
+                LivePreviews.ESPBox.Visible = false
+            end
         end
     end)
 
     local obj = {
         Value  = color,
-        Set    = function(self, cl) color=cl; ch,cs,cv=Color3.toHSV(cl); self.Value=cl; updPick() end,
+        Set    = function(self, cl)
+            color=cl; ch,cs,cv=Color3.toHSV(cl); self.Value=cl; updP()
+        end,
         Silent = function(self, cl)
             color=cl; ch,cs,cv=Color3.toHSV(cl); self.Value=cl
             CB.BackgroundColor3=color; CM.BackgroundColor3=Color3.fromHSV(ch,1,1)
             CP.Position=UDim2.new(cs,-1,1-cv,-1); HP.Position=UDim2.new(0,0,ch,-1)
-            if LivePreviews.FOVCircle then LivePreviews.FOVCircle.Color = color end
+            if previewType == "fov" and LivePreviews.FOVCircle then
+                LivePreviews.FOVCircle.Color = color
+            elseif (previewType == "esp_visible" or previewType == "esp_hidden") and LivePreviews.ESPBox then
+                LivePreviews.ESPBox.Color = color
+            end
         end,
         Get = function(self) return color end,
     }
@@ -1783,14 +1869,21 @@ function Library:Destroy()
 end
 
 -- ═══════════════════════════════════════════════════
---  LIVE PREVIEW SYNC (FOV FILLED TOGGLE)
+--  LIVE PREVIEW HELPERS
 -- ═══════════════════════════════════════════════════
 function Library:UpdateFOVPreview(radius, visible, filled, color)
     if LivePreviews.FOVCircle then
-        LivePreviews.FOVCircle.Radius = radius or 150
-        LivePreviews.FOVCircle.Visible = visible or false
-        LivePreviews.FOVCircle.Filled = filled or false
-        LivePreviews.FOVCircle.Color = color or T.accent
+        if radius then LivePreviews.FOVCircle.Radius = radius end
+        if visible ~= nil then LivePreviews.FOVCircle.Visible = visible end
+        if filled ~= nil then LivePreviews.FOVCircle.Filled = filled end
+        if color then LivePreviews.FOVCircle.Color = color end
+    end
+end
+
+function Library:UpdateESPPreview(color, visible)
+    if LivePreviews.ESPBox then
+        if color then LivePreviews.ESPBox.Color = color end
+        if visible ~= nil then LivePreviews.ESPBox.Visible = visible end
     end
 end
 
