@@ -1529,26 +1529,34 @@ function Library:CreateWindow(opts)
     -- [FIX 2] El hook del toggle ahora verifica Library._bindingKey.
     -- Si un Keybind está esperando input, este hook no actúa, evitando
     -- que la tecla nueva también dispare accidentalmente el toggle.
-    hook(UIS.InputBegan, function(key)
-        if UIS:GetFocusedTextBox() then return end
-        if Library._bindingKey then return end  -- << FIX 2
-        if key.KeyCode == Win.ToggleKey then
-            Main.Visible = not Main.Visible
-            setCursorVisible(Main.Visible)
+hook(UIS.InputBegan, function(key)
+    if UIS:GetFocusedTextBox() then return end
+    if Library._bindingKey then return end
+    if key.KeyCode == Win.ToggleKey then
+        Main.Visible = not Main.Visible
+        setCursorVisible(Main.Visible)
+        if Main.Visible then
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
-    end)
+        -- Cuando se cierra, NO forzar nada, el juego recupera el control solo
+    end
+end)
 
-    hook(RunService.RenderStepped, function()
-        if Main and Main.Visible then
-            UIS.MouseIconEnabled = false
-            setCursorVisible(true)
-            if UIS.MouseBehavior == Enum.MouseBehavior.LockCenter then
-                UIS.MouseBehavior = Enum.MouseBehavior.Default
-            end
-        else
-            setCursorVisible(false)
+hook(RunService.RenderStepped, function()
+    if Main and Main.Visible then
+        UIS.MouseIconEnabled = false
+        setCursorVisible(true)
+        -- Solo cambiar MouseBehavior cuando el menú ESTÁ abierto
+        -- y solo si no estamos en un TextBox
+        if not UIS:GetFocusedTextBox() then
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
         end
-    end)
+    else
+        setCursorVisible(false)
+        UIS.MouseIconEnabled = true
+        -- NO tocar MouseBehavior aquí, dejar que el juego lo controle
+    end
+end)
 
     local _footerParts    = {}
     local _firstTab       = true
